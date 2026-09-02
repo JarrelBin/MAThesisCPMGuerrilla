@@ -1,4 +1,36 @@
-.venv/
+#kraken OCR models
+models/*.mlmodel
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Kraken models
+models/*.mlmodel
+
+# Generated page images
+data/images/*
+
+# Raw data
+data/raw/*
+
+# Processed data
+data/processed/*
+
+# Generated OCR output
+data/ocr/*
+
+# Corrected/generated output
+data/corrected/*
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
+
+#jupyter
 .ipynb_checkpoints/
