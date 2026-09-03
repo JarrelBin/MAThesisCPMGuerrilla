@@ -1,0 +1,1428 @@
+[
+  {
+    "region_index": 1,
+    "ocr_text": "SECRET",
+    "gt_text": "SECRET",
+    "annotation_status": "correct",
+    "confidence": 0.9993178844451904,
+    "bbox": {
+      "x_min": 1624,
+      "y_min": 320,
+      "x_max": 1765,
+      "y_max": 361
+    },
+    "polygon": [
+      [
+        1625,
+        320
+      ],
+      [
+        1765,
+        322
+      ],
+      [
+        1764,
+        361
+      ],
+      [
+        1624,
+        359
+      ]
+    ]
+  },
+  {
+    "region_index": 2,
+    "ocr_text": "Distribution:",
+    "gt_text": "Distribution:",
+    "annotation_status": "correct",
+    "confidence": 0.9651310443878174,
+    "bbox": {
+      "x_min": 589,
+      "y_min": 518,
+      "x_max": 879,
+      "y_max": 566
+    },
+    "polygon": [
+      [
+        590,
+        518
+      ],
+      [
+        879,
+        526
+      ],
+      [
+        878,
+        566
+      ],
+      [
+        589,
+        559
+      ]
+    ]
+  },
+  {
+    "region_index": 3,
+    "ocr_text": "External",
+    "gt_text": "External",
+    "annotation_status": "correct",
+    "confidence": 0.997950553894043,
+    "bbox": {
+      "x_min": 585,
+      "y_min": 652,
+      "x_max": 769,
+      "y_max": 698
+    },
+    "polygon": [
+      [
+        586,
+        652
+      ],
+      [
+        769,
+        655
+      ],
+      [
+        768,
+        698
+      ],
+      [
+        585,
+        694
+      ]
+    ]
+  },
+  {
+    "region_index": 4,
+    "ocr_text": "Copies",
+    "gt_text": "Copies",
+    "annotation_status": "correct",
+    "confidence": 0.9999348521232605,
+    "bbox": {
+      "x_min": 1613,
+      "y_min": 670,
+      "x_max": 1758,
+      "y_max": 720
+    },
+    "polygon": [
+      [
+        1614,
+        670
+      ],
+      [
+        1758,
+        674
+      ],
+      [
+        1757,
+        720
+      ],
+      [
+        1613,
+        716
+      ]
+    ]
+  },
+  {
+    "region_index": 5,
+    "ocr_text": "Joint Chairman GBC Thailand, Bangkok",
+    "gt_text": "Joint Chairman GBC Thailand, Bangkok",
+    "annotation_status": "correct",
+    "confidence": 0.9980577826499939,
+    "bbox": {
+      "x_min": 584,
+      "y_min": 804,
+      "x_max": 1381,
+      "y_max": 865
+    },
+    "polygon": [
+      [
+        585,
+        804
+      ],
+      [
+        1381,
+        821
+      ],
+      [
+        1380,
+        865
+      ],
+      [
+        584,
+        848
+      ]
+    ]
+  },
+  {
+    "region_index": 6,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.952183723449707,
+    "bbox": {
+      "x_min": 1660,
+      "y_min": 828,
+      "x_max": 1688,
+      "y_max": 871
+    },
+    "polygon": [
+      [
+        1660,
+        828
+      ],
+      [
+        1688,
+        828
+      ],
+      [
+        1688,
+        871
+      ],
+      [
+        1660,
+        871
+      ]
+    ]
+  },
+  {
+    "region_index": 7,
+    "ocr_text": "Joint Chairman GBC Malaysia, K/Lumpur",
+    "gt_text": "Joint Chairman GBC Malaysia, K/Lumpur",
+    "annotation_status": "correct",
+    "confidence": 0.9892688393592834,
+    "bbox": {
+      "x_min": 580,
+      "y_min": 892,
+      "x_max": 1399,
+      "y_max": 956
+    },
+    "polygon": [
+      [
+        581,
+        892
+      ],
+      [
+        1399,
+        906
+      ],
+      [
+        1398,
+        956
+      ],
+      [
+        580,
+        942
+      ]
+    ]
+  },
+  {
+    "region_index": 8,
+    "ocr_text": "2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.9999942779541016,
+    "bbox": {
+      "x_min": 1655,
+      "y_min": 916,
+      "x_max": 1689,
+      "y_max": 960
+    },
+    "polygon": [
+      [
+        1655,
+        916
+      ],
+      [
+        1689,
+        916
+      ],
+      [
+        1689,
+        960
+      ],
+      [
+        1655,
+        960
+      ]
+    ]
+  },
+  {
+    "region_index": 9,
+    "ocr_text": "Joint Chairman RBC/Comdr 4th Region",
+    "gt_text": "Joint Chairman RBC/Comdr 4th Region",
+    "annotation_status": "correct",
+    "confidence": 0.9968670606613159,
+    "bbox": {
+      "x_min": 578,
+      "y_min": 976,
+      "x_max": 1354,
+      "y_max": 1043
+    },
+    "polygon": [
+      [
+        579,
+        976
+      ],
+      [
+        1354,
+        993
+      ],
+      [
+        1353,
+        1043
+      ],
+      [
+        578,
+        1026
+      ]
+    ]
+  },
+  {
+    "region_index": 10,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.737336277961731,
+    "bbox": {
+      "x_min": 1655,
+      "y_min": 1005,
+      "x_max": 1683,
+      "y_max": 1047
+    },
+    "polygon": [
+      [
+        1655,
+        1005
+      ],
+      [
+        1683,
+        1005
+      ],
+      [
+        1683,
+        1047
+      ],
+      [
+        1655,
+        1047
+      ]
+    ]
+  },
+  {
+    "region_index": 11,
+    "ocr_text": "Joint Chairman RBC/GOC 2nd Division",
+    "gt_text": "Joint Chairman RBC/GOC 2nd Division",
+    "annotation_status": "correct",
+    "confidence": 0.998690128326416,
+    "bbox": {
+      "x_min": 577,
+      "y_min": 1066,
+      "x_max": 1351,
+      "y_max": 1127
+    },
+    "polygon": [
+      [
+        578,
+        1066
+      ],
+      [
+        1351,
+        1081
+      ],
+      [
+        1350,
+        1127
+      ],
+      [
+        577,
+        1113
+      ]
+    ]
+  },
+  {
+    "region_index": 12,
+    "ocr_text": "2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.9999926090240479,
+    "bbox": {
+      "x_min": 1650,
+      "y_min": 1091,
+      "x_max": 1685,
+      "y_max": 1135
+    },
+    "polygon": [
+      [
+        1650,
+        1091
+      ],
+      [
+        1685,
+        1091
+      ],
+      [
+        1685,
+        1135
+      ],
+      [
+        1650,
+        1135
+      ]
+    ]
+  },
+  {
+    "region_index": 13,
+    "ocr_text": "CSOC Bangkok",
+    "gt_text": "CSOC Bangkok",
+    "annotation_status": "correct",
+    "confidence": 0.9738085269927979,
+    "bbox": {
+      "x_min": 572,
+      "y_min": 1154,
+      "x_max": 847,
+      "y_max": 1206
+    },
+    "polygon": [
+      [
+        573,
+        1154
+      ],
+      [
+        847,
+        1161
+      ],
+      [
+        846,
+        1206
+      ],
+      [
+        572,
+        1199
+      ]
+    ]
+  },
+  {
+    "region_index": 14,
+    "ocr_text": "2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.9999667406082153,
+    "bbox": {
+      "x_min": 1647,
+      "y_min": 1181,
+      "x_max": 1681,
+      "y_max": 1224
+    },
+    "polygon": [
+      [
+        1647,
+        1181
+      ],
+      [
+        1681,
+        1181
+      ],
+      [
+        1681,
+        1224
+      ],
+      [
+        1647,
+        1224
+      ]
+    ]
+  },
+  {
+    "region_index": 15,
+    "ocr_text": "Inspector-General of Police (D.S.B.) K/Lumpur",
+    "gt_text": "Inspector-General of Police (D.S.B.) K/Lumpur",
+    "annotation_status": "correct",
+    "confidence": 0.9988046288490295,
+    "bbox": {
+      "x_min": 571,
+      "y_min": 1239,
+      "x_max": 1568,
+      "y_max": 1310
+    },
+    "polygon": [
+      [
+        572,
+        1239
+      ],
+      [
+        1568,
+        1260
+      ],
+      [
+        1567,
+        1310
+      ],
+      [
+        571,
+        1289
+      ]
+    ]
+  },
+  {
+    "region_index": 16,
+    "ocr_text": "5",
+    "gt_text": "5",
+    "annotation_status": "correct",
+    "confidence": 0.9999891519546509,
+    "bbox": {
+      "x_min": 1646,
+      "y_min": 1268,
+      "x_max": 1678,
+      "y_max": 1313
+    },
+    "polygon": [
+      [
+        1646,
+        1268
+      ],
+      [
+        1678,
+        1268
+      ],
+      [
+        1678,
+        1313
+      ],
+      [
+        1646,
+        1313
+      ]
+    ]
+  },
+  {
+    "region_index": 17,
+    "ocr_text": "Comdr SB Bangkok",
+    "gt_text": "Comdr SB Bangkok",
+    "annotation_status": "correct",
+    "confidence": 0.996487557888031,
+    "bbox": {
+      "x_min": 567,
+      "y_min": 1331,
+      "x_max": 931,
+      "y_max": 1383
+    },
+    "polygon": [
+      [
+        568,
+        1331
+      ],
+      [
+        931,
+        1339
+      ],
+      [
+        930,
+        1383
+      ],
+      [
+        567,
+        1375
+      ]
+    ]
+  },
+  {
+    "region_index": 18,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.8372933864593506,
+    "bbox": {
+      "x_min": 1647,
+      "y_min": 1355,
+      "x_max": 1675,
+      "y_max": 1398
+    },
+    "polygon": [
+      [
+        1647,
+        1355
+      ],
+      [
+        1675,
+        1355
+      ],
+      [
+        1675,
+        1398
+      ],
+      [
+        1647,
+        1398
+      ]
+    ]
+  },
+  {
+    "region_index": 19,
+    "ocr_text": "DIR CPM 43",
+    "gt_text": "DIR CPM 43",
+    "annotation_status": "correct",
+    "confidence": 0.999796986579895,
+    "bbox": {
+      "x_min": 564,
+      "y_min": 1418,
+      "x_max": 794,
+      "y_max": 1468
+    },
+    "polygon": [
+      [
+        565,
+        1418
+      ],
+      [
+        794,
+        1423
+      ],
+      [
+        792,
+        1468
+      ],
+      [
+        564,
+        1463
+      ]
+    ]
+  },
+  {
+    "region_index": 20,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9976797699928284,
+    "bbox": {
+      "x_min": 1643,
+      "y_min": 1441,
+      "x_max": 1675,
+      "y_max": 1486
+    },
+    "polygon": [
+      [
+        1643,
+        1441
+      ],
+      [
+        1675,
+        1441
+      ],
+      [
+        1675,
+        1486
+      ],
+      [
+        1643,
+        1486
+      ]
+    ]
+  },
+  {
+    "region_index": 21,
+    "ocr_text": "Comdr BPP 9th Region",
+    "gt_text": "Comdr BPP 9th Region",
+    "annotation_status": "correct",
+    "confidence": 0.9997995495796204,
+    "bbox": {
+      "x_min": 562,
+      "y_min": 1505,
+      "x_max": 1010,
+      "y_max": 1558
+    },
+    "polygon": [
+      [
+        563,
+        1505
+      ],
+      [
+        1010,
+        1514
+      ],
+      [
+        1009,
+        1558
+      ],
+      [
+        562,
+        1548
+      ]
+    ]
+  },
+  {
+    "region_index": 22,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.8806509375572205,
+    "bbox": {
+      "x_min": 1643,
+      "y_min": 1529,
+      "x_max": 1670,
+      "y_max": 1571
+    },
+    "polygon": [
+      [
+        1643,
+        1529
+      ],
+      [
+        1670,
+        1529
+      ],
+      [
+        1670,
+        1571
+      ],
+      [
+        1643,
+        1571
+      ]
+    ]
+  },
+  {
+    "region_index": 23,
+    "ocr_text": "CPO (H.S.B.) Kedah/Perlis",
+    "gt_text": "CPO (H.S.B.) Kedah/Perlis",
+    "annotation_status": "correct",
+    "confidence": 0.997809648513794,
+    "bbox": {
+      "x_min": 560,
+      "y_min": 1588,
+      "x_max": 1118,
+      "y_max": 1650
+    },
+    "polygon": [
+      [
+        561,
+        1588
+      ],
+      [
+        1118,
+        1599
+      ],
+      [
+        1117,
+        1650
+      ],
+      [
+        560,
+        1639
+      ]
+    ]
+  },
+  {
+    "region_index": 24,
+    "ocr_text": "2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.9999630451202393,
+    "bbox": {
+      "x_min": 1636,
+      "y_min": 1617,
+      "x_max": 1672,
+      "y_max": 1661
+    },
+    "polygon": [
+      [
+        1640,
+        1617
+      ],
+      [
+        1672,
+        1619
+      ],
+      [
+        1668,
+        1661
+      ],
+      [
+        1636,
+        1659
+      ]
+    ]
+  },
+  {
+    "region_index": 25,
+    "ocr_text": "CPO (H.S.B.) Kelantan",
+    "gt_text": "CPO (H.S.B.) Kelantan",
+    "annotation_status": "correct",
+    "confidence": 0.9774740934371948,
+    "bbox": {
+      "x_min": 558,
+      "y_min": 1676,
+      "x_max": 1029,
+      "y_max": 1732
+    },
+    "polygon": [
+      [
+        559,
+        1676
+      ],
+      [
+        1029,
+        1684
+      ],
+      [
+        1028,
+        1732
+      ],
+      [
+        558,
+        1724
+      ]
+    ]
+  },
+  {
+    "region_index": 26,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.879974365234375,
+    "bbox": {
+      "x_min": 1639,
+      "y_min": 1703,
+      "x_max": 1666,
+      "y_max": 1745
+    },
+    "polygon": [
+      [
+        1639,
+        1703
+      ],
+      [
+        1666,
+        1703
+      ],
+      [
+        1666,
+        1745
+      ],
+      [
+        1639,
+        1745
+      ]
+    ]
+  },
+  {
+    "region_index": 27,
+    "ocr_text": "CPO (H.S.B.) Perak",
+    "gt_text": "CPO (H.S.B.) Perak",
+    "annotation_status": "correct",
+    "confidence": 0.9915179014205933,
+    "bbox": {
+      "x_min": 554,
+      "y_min": 1762,
+      "x_max": 964,
+      "y_max": 1821
+    },
+    "polygon": [
+      [
+        555,
+        1762
+      ],
+      [
+        964,
+        1770
+      ],
+      [
+        963,
+        1821
+      ],
+      [
+        554,
+        1812
+      ]
+    ]
+  },
+  {
+    "region_index": 28,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9998250603675842,
+    "bbox": {
+      "x_min": 1632,
+      "y_min": 1787,
+      "x_max": 1666,
+      "y_max": 1833
+    },
+    "polygon": [
+      [
+        1634,
+        1787
+      ],
+      [
+        1666,
+        1789
+      ],
+      [
+        1663,
+        1833
+      ],
+      [
+        1632,
+        1831
+      ]
+    ]
+  },
+  {
+    "region_index": 29,
+    "ocr_text": "SB Section 6 Sub-Division 7, Songkhla",
+    "gt_text": "SB Section 6 Sub-Division 7, Songkhla",
+    "annotation_status": "correct",
+    "confidence": 0.9909747242927551,
+    "bbox": {
+      "x_min": 552,
+      "y_min": 1855,
+      "x_max": 1374,
+      "y_max": 1917
+    },
+    "polygon": [
+      [
+        553,
+        1855
+      ],
+      [
+        1374,
+        1873
+      ],
+      [
+        1373,
+        1917
+      ],
+      [
+        552,
+        1899
+      ]
+    ]
+  },
+  {
+    "region_index": 30,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9991440773010254,
+    "bbox": {
+      "x_min": 1633,
+      "y_min": 1881,
+      "x_max": 1660,
+      "y_max": 1921
+    },
+    "polygon": [
+      [
+        1633,
+        1881
+      ],
+      [
+        1660,
+        1881
+      ],
+      [
+        1660,
+        1921
+      ],
+      [
+        1633,
+        1921
+      ]
+    ]
+  },
+  {
+    "region_index": 31,
+    "ocr_text": "Internal",
+    "gt_text": "Internal",
+    "annotation_status": "correct",
+    "confidence": 0.9999394416809082,
+    "bbox": {
+      "x_min": 549,
+      "y_min": 2038,
+      "x_max": 733,
+      "y_max": 2082
+    },
+    "polygon": [
+      [
+        549,
+        2038
+      ],
+      [
+        733,
+        2040
+      ],
+      [
+        732,
+        2082
+      ],
+      [
+        549,
+        2080
+      ]
+    ]
+  },
+  {
+    "region_index": 32,
+    "ocr_text": "Chief of RBCO",
+    "gt_text": "Chief of RBCO",
+    "annotation_status": "correct",
+    "confidence": 0.9844203591346741,
+    "bbox": {
+      "x_min": 547,
+      "y_min": 2167,
+      "x_max": 840,
+      "y_max": 2214
+    },
+    "polygon": [
+      [
+        547,
+        2167
+      ],
+      [
+        840,
+        2172
+      ],
+      [
+        839,
+        2214
+      ],
+      [
+        547,
+        2209
+      ]
+    ]
+  },
+  {
+    "region_index": 33,
+    "ocr_text": "2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.9999704360961914,
+    "bbox": {
+      "x_min": 1621,
+      "y_min": 2188,
+      "x_max": 1655,
+      "y_max": 2230
+    },
+    "polygon": [
+      [
+        1621,
+        2188
+      ],
+      [
+        1655,
+        2188
+      ],
+      [
+        1655,
+        2230
+      ],
+      [
+        1621,
+        2230
+      ]
+    ]
+  },
+  {
+    "region_index": 34,
+    "ocr_text": "Head. Intelligence Division",
+    "gt_text": "Head Intelligence Division",
+    "annotation_status": "correct",
+    "confidence": 0.9898390769958496,
+    "bbox": {
+      "x_min": 541,
+      "y_min": 2257,
+      "x_max": 1121,
+      "y_max": 2310
+    },
+    "polygon": [
+      [
+        541,
+        2257
+      ],
+      [
+        1121,
+        2266
+      ],
+      [
+        1121,
+        2310
+      ],
+      [
+        541,
+        2301
+      ]
+    ]
+  },
+  {
+    "region_index": 35,
+    "ocr_text": ".2",
+    "gt_text": "2",
+    "annotation_status": "correct",
+    "confidence": 0.7787052392959595,
+    "bbox": {
+      "x_min": 1599,
+      "y_min": 2276,
+      "x_max": 1655,
+      "y_max": 2322
+    },
+    "polygon": [
+      [
+        1599,
+        2276
+      ],
+      [
+        1655,
+        2276
+      ],
+      [
+        1655,
+        2322
+      ],
+      [
+        1599,
+        2322
+      ]
+    ]
+  },
+  {
+    "region_index": 36,
+    "ocr_text": "Dy. Head Intelligence Ops Section",
+    "gt_text": "Dy. Head Intelligence Ops Section",
+    "annotation_status": "correct",
+    "confidence": 0.9968962073326111,
+    "bbox": {
+      "x_min": 541,
+      "y_min": 2347,
+      "x_max": 1273,
+      "y_max": 2402
+    },
+    "polygon": [
+      [
+        541,
+        2347
+      ],
+      [
+        1273,
+        2358
+      ],
+      [
+        1272,
+        2402
+      ],
+      [
+        541,
+        2391
+      ]
+    ]
+  },
+  {
+    "region_index": 37,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9992609620094299,
+    "bbox": {
+      "x_min": 1618,
+      "y_min": 2365,
+      "x_max": 1650,
+      "y_max": 2411
+    },
+    "polygon": [
+      [
+        1618,
+        2365
+      ],
+      [
+        1650,
+        2365
+      ],
+      [
+        1650,
+        2411
+      ],
+      [
+        1618,
+        2411
+      ]
+    ]
+  },
+  {
+    "region_index": 38,
+    "ocr_text": "Head Research Section",
+    "gt_text": "Head Research Section",
+    "annotation_status": "correct",
+    "confidence": 0.9985852837562561,
+    "bbox": {
+      "x_min": 538,
+      "y_min": 2435,
+      "x_max": 1007,
+      "y_max": 2484
+    },
+    "polygon": [
+      [
+        538,
+        2435
+      ],
+      [
+        1007,
+        2443
+      ],
+      [
+        1006,
+        2484
+      ],
+      [
+        538,
+        2476
+      ]
+    ]
+  },
+  {
+    "region_index": 39,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.991299569606781,
+    "bbox": {
+      "x_min": 1616,
+      "y_min": 2454,
+      "x_max": 1648,
+      "y_max": 2498
+    },
+    "polygon": [
+      [
+        1616,
+        2454
+      ],
+      [
+        1648,
+        2454
+      ],
+      [
+        1648,
+        2498
+      ],
+      [
+        1616,
+        2498
+      ]
+    ]
+  },
+  {
+    "region_index": 40,
+    "ocr_text": "Head Planning Section",
+    "gt_text": "Head Planning Section",
+    "annotation_status": "correct",
+    "confidence": 0.9954780340194702,
+    "bbox": {
+      "x_min": 535,
+      "y_min": 2522,
+      "x_max": 1005,
+      "y_max": 2573
+    },
+    "polygon": [
+      [
+        535,
+        2522
+      ],
+      [
+        1005,
+        2530
+      ],
+      [
+        1004,
+        2573
+      ],
+      [
+        535,
+        2566
+      ]
+    ]
+  },
+  {
+    "region_index": 41,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9157816767692566,
+    "bbox": {
+      "x_min": 1616,
+      "y_min": 2542,
+      "x_max": 1644,
+      "y_max": 2584
+    },
+    "polygon": [
+      [
+        1616,
+        2542
+      ],
+      [
+        1644,
+        2542
+      ],
+      [
+        1644,
+        2584
+      ],
+      [
+        1616,
+        2584
+      ]
+    ]
+  },
+  {
+    "region_index": 42,
+    "ocr_text": "OC Field Team Sadao/Yala/Betong/Weng",
+    "gt_text": "OC Field Team Sadao/Yala/Betong/Weng",
+    "annotation_status": "correct",
+    "confidence": 0.9911362528800964,
+    "bbox": {
+      "x_min": 532,
+      "y_min": 2603,
+      "x_max": 1334,
+      "y_max": 2671
+    },
+    "polygon": [
+      [
+        533,
+        2603
+      ],
+      [
+        1334,
+        2617
+      ],
+      [
+        1333,
+        2671
+      ],
+      [
+        532,
+        2657
+      ]
+    ]
+  },
+  {
+    "region_index": 43,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9998493194580078,
+    "bbox": {
+      "x_min": 1613,
+      "y_min": 2631,
+      "x_max": 1642,
+      "y_max": 2672
+    },
+    "polygon": [
+      [
+        1613,
+        2631
+      ],
+      [
+        1642,
+        2631
+      ],
+      [
+        1642,
+        2672
+      ],
+      [
+        1613,
+        2672
+      ]
+    ]
+  },
+  {
+    "region_index": 44,
+    "ocr_text": "LF/Head Research Section (S)",
+    "gt_text": "LF/Head Research Section (S)",
+    "annotation_status": "correct",
+    "confidence": 0.986760139465332,
+    "bbox": {
+      "x_min": 533,
+      "y_min": 2694,
+      "x_max": 1153,
+      "y_max": 2755
+    },
+    "polygon": [
+      [
+        533,
+        2694
+      ],
+      [
+        1153,
+        2702
+      ],
+      [
+        1153,
+        2755
+      ],
+      [
+        533,
+        2746
+      ]
+    ]
+  },
+  {
+    "region_index": 45,
+    "ocr_text": "1",
+    "gt_text": "1",
+    "annotation_status": "correct",
+    "confidence": 0.9997673630714417,
+    "bbox": {
+      "x_min": 1612,
+      "y_min": 2718,
+      "x_max": 1641,
+      "y_max": 2761
+    },
+    "polygon": [
+      [
+        1612,
+        2718
+      ],
+      [
+        1641,
+        2718
+      ],
+      [
+        1641,
+        2761
+      ],
+      [
+        1612,
+        2761
+      ]
+    ]
+  },
+  {
+    "region_index": 46,
+    "ocr_text": "SECRET",
+    "gt_text": "SECRET",
+    "annotation_status": "correct",
+    "confidence": 0.9995121955871582,
+    "bbox": {
+      "x_min": 1557,
+      "y_min": 3054,
+      "x_max": 1702,
+      "y_max": 3100
+    },
+    "polygon": [
+      [
+        1558,
+        3054
+      ],
+      [
+        1702,
+        3058
+      ],
+      [
+        1701,
+        3100
+      ],
+      [
+        1557,
+        3096
+      ]
+    ]
+  }
+]
