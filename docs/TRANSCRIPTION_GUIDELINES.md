@@ -111,3 +111,7 @@ Preserve meaningful textual lines where possible.
 
 Columns and other layout structures are represented separately
 rather than reconstructed using spaces.
+
+## 13. Tokenization policy
+
+Tokenization identifies lexical units, not named entities or normalized concepts. Raw OCR spelling and capitalization are preserved. Stop words are retained. Punctuation is retained as separate tokens except where punctuation forms part of a lexical unit, such as dotted initialisms, hyphenated words, and apostrophe-containing words.
