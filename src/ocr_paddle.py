@@ -44,35 +44,86 @@ class PaddleOCREngine:
         )
 
         results = self.ocr.predict(
-            input=str(image_path)
+            input=str(image_path),
+            return_word_box=True,
         )
 
         regions = []
 
         for result in results:
-
+            #result.print()
             data = result.json["res"]
+            
+            region_index = 4
+            
+            #tiny diagnostic code to confirm semantic alignment
+            parts = data["text_word"][region_index]
+            boxes = data["text_word_boxes"][region_index]
+
+            print("TEXT:")
+            print(data["rec_texts"][region_index])
+
+            print()
+            print("PARTS:")
+            print(parts)
+
+            print()
+            print("NUMBER OF PARTS:")
+            print(len(parts))
+
+            print()
+            print("NUMBER OF BOXES:")
+            print(len(boxes))
 
             texts = data["rec_texts"]
             scores = data["rec_scores"]
             boxes = data["rec_boxes"]
             polygons = data["rec_polys"]
+            
+            word_parts = data["text_word"]
+            word_boxes = data["text_word_boxes"]
 
             for sequence, (
                 text,
                 score,
                 box,
                 polygon,
+                parts,
+                part_boxes,
             ) in enumerate(
                 zip(
                     texts,
                     scores,
                     boxes,
                     polygons,
+                    word_parts,
+                    word_boxes,
                 ),
                 start=1,
             ):
+                paddle_parts = []
 
+                for part_index, (
+                    part,
+                    part_box,
+                ) in enumerate(
+                    zip(
+                        parts,
+                        part_boxes,
+                    ),
+                    start=1,
+                ):
+                    paddle_parts.append(
+                        {
+                            "part_index": part_index,
+                            "text": str(part),
+                            "bbox": [
+                                int(value)
+                                for value in part_box
+                            ],
+                        }
+                    )
+    
                 x_min, y_min, x_max, y_max = [
                     int(value) for value in box
                 ]
@@ -93,6 +144,8 @@ class PaddleOCREngine:
                         [int(x), int(y)]
                         for x, y in polygon
                     ],
+                    
+                    "paddle_parts": paddle_parts,
                 }
 
                 regions.append(region)

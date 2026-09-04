@@ -8,7 +8,7 @@ def main():
     image_path = Path(
         "data/images/"
         "primary_source_to_ocr_sample/"
-        "page_0002.png"
+        "page_0006.png"
     )
 
     output_dir = Path(
@@ -17,11 +17,11 @@ def main():
     )
 
     json_output = (
-        output_dir / "page_0002.json"
+        output_dir / "page_0006.json"
     )
 
     text_output = (
-        output_dir / "page_0002.txt"
+        output_dir / "page_0006.txt"
     )
 
     print("Loading PaddleOCR...")

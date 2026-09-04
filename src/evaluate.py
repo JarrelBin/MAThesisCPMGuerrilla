@@ -1,41 +1,54 @@
+import re
+
 from jiwer import cer, wer
 
 
-def evaluate_regions(regions):
+def normalize_for_evaluation(text: str) -> str:
     """
-    Evaluate reviewed OCR regions against ground truth.
+    Normalize layout-related whitespace without changing
+    the actual textual content.
 
-    Illegible regions are excluded.
+    - tabs become spaces
+    - repeated spaces collapse to one
+    - leading/trailing whitespace is removed
     """
 
-    references = []
-    hypotheses = []
+    text = text.replace("\t", " ")
 
-    for region in regions:
+    lines = []
 
-        if region["annotation_status"] != "correct":
-            continue
+    for line in text.splitlines():
+        line = re.sub(r"[ ]+", " ", line)
+        line = line.strip()
 
-        gt = region["gt_text"]
-        ocr = region["ocr_text"]
+        if line:
+            lines.append(line)
 
-        if gt is None:
-            continue
+    return " ".join(lines)
 
-        references.append(gt)
-        hypotheses.append(ocr)
 
-    reference_text = "\n".join(references)
-    hypothesis_text = "\n".join(hypotheses)
+def evaluate_text(
+    reference: str,
+    hypothesis: str,
+) -> dict:
+
+    reference = normalize_for_evaluation(
+        reference
+    )
+
+    hypothesis = normalize_for_evaluation(
+        hypothesis
+    )
 
     return {
         "cer": cer(
-            reference_text,
-            hypothesis_text,
+            reference,
+            hypothesis,
         ),
         "wer": wer(
-            reference_text,
-            hypothesis_text,
+            reference,
+            hypothesis,
         ),
-        "evaluated_regions": len(references),
+        "reference": reference,
+        "hypothesis": hypothesis,
     }
