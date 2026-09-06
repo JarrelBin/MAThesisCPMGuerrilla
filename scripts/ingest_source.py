@@ -1,11 +1,16 @@
 import argparse
+
 from pathlib import Path
+
+from src.paths import (
+    image_directory,
+    to_project_relative,
+)
 
 from PIL import Image
 
 from src.database import get_connection
 from src.ingest import inspect_source_file
-from src.paths import image_directory_for_pdf
 from src.render import render_pdf
 from src.repository import (
     get_or_create_corpus,
@@ -54,15 +59,33 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.pdf.exists():
+    pdf_path = args.pdf.resolve()
+
+    if not pdf_path.is_file():
         raise FileNotFoundError(
-            f"PDF not found: {args.pdf}"
+            f"PDF not found: {pdf_path}"
         )
+
+    image_dir = image_directory(
+        pdf_path
+    )
+
+    print(
+        f"PDF:       {pdf_path}"
+    )
+
+    print(
+        f"Images:    {image_dir}"
+    )
+
+    metadata = inspect_source_file(
+        pdf_path
+    )
 
     # =========================================================
     # Inspect source file
     # =========================================================
-
+    
     metadata = inspect_source_file(
         args.pdf
     )
@@ -71,7 +94,7 @@ def main():
     # Render PDF
     # =========================================================
 
-    image_dir = image_directory_for_pdf(
+    image_dir = image_directory(
         args.pdf
     )
 
@@ -94,7 +117,7 @@ def main():
     print()
 
     page_images = render_pdf(
-        args.pdf,
+        pdf_path,
         image_dir,
         dpi=DPI,
         overwrite=args.overwrite_images,
@@ -157,7 +180,7 @@ def main():
             connection,
             corpus_id=corpus_id,
             filename=metadata["filename"],
-            source_path=metadata["filepath"],
+            source_path=to_project_relative(pdf_path),
             sha256=metadata["sha256"],
             page_count=page_count,
             file_sequence=args.sequence,
@@ -220,7 +243,7 @@ def main():
                 corpus_page_number=(
                     next_corpus_page
                 ),
-                image_path=str(image_path),
+                image_path=to_project_relative(image_path),
                 width=width,
                 height=height,
                 dpi=DPI,

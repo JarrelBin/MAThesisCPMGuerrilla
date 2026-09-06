@@ -1,7 +1,6 @@
 import argparse
 import json
-from pathlib import Path
-
+from src.paths import paddle_directory
 from importlib.metadata import version
 
 PADDLEOCR_VERSION = version(
@@ -222,9 +221,8 @@ def main():
     # Derive OCR directory
     # ---------------------------------
 
-    ocr_dir = (
-        Path("data/ocr/paddle")
-        / Path(filename).stem
+    ocr_dir = paddle_directory(
+        filename
     )
 
     if not ocr_dir.exists():

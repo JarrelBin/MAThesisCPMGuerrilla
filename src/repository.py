@@ -1,10 +1,8 @@
 from pathlib import Path
 
 from src.database import get_connection
-from src.ingest import ingest_document
 
 import json
-
 
 def get_ocr_run(
     connection,

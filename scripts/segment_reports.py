@@ -1,11 +1,9 @@
 import argparse
 import json
-from pathlib import Path
 
+from src.paths import paddle_directory
 from src.database import get_connection
-from src.report_detection import (
-    detect_report_boundary,
-)
+from src.report_detection import detect_report_boundary
 from src.repository import (
     insert_report,
     assign_page_to_report,
@@ -13,7 +11,31 @@ from src.repository import (
 )
 
 
-CORPUS_NAME = "Defector Reports"
+def page_has_report(
+    connection,
+    page_id: int,
+) -> bool:
+    """
+    Return True if the page is already assigned
+    to a historical report.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT report_id
+            FROM page
+            WHERE page_id = %s;
+            """,
+            (page_id,),
+        )
+
+        result = cursor.fetchone()
+
+    return (
+        result is not None
+        and result[0] is not None
+    )
 
 
 def main():
@@ -31,24 +53,26 @@ def main():
         help="source_file_id to segment",
     )
 
-
     args = parser.parse_args()
+
+    # =========================================================
+    # Database transaction
+    # =========================================================
 
     with get_connection() as connection:
 
-        # --------------------------------
-        # Find corpus/source file
-        # --------------------------------
+        # -----------------------------------------------------
+        # Find source file
+        # -----------------------------------------------------
 
         with connection.cursor() as cursor:
-
             cursor.execute(
                 """
                 SELECT
-                    sf.corpus_id,
-                    sf.filename
-                FROM source_file sf
-                WHERE sf.source_file_id = %s;
+                    corpus_id,
+                    filename
+                FROM source_file
+                WHERE source_file_id = %s;
                 """,
                 (args.source_file,),
             )
@@ -57,25 +81,34 @@ def main():
 
         if source is None:
             raise RuntimeError(
-                "Source file not found."
+                f"Source file ID "
+                f"{args.source_file} "
+                f"does not exist."
             )
 
-        corpus_id = source[0]
-        filename = source[1]
+        corpus_id, filename = source
 
-        source_name = Path(filename).stem
+        # -----------------------------------------------------
+        # Portable OCR directory
+        #
+        # src.paths resolves this relative to PROJECT_ROOT.
+        # -----------------------------------------------------
 
-        ocr_dir = (
-            Path("data/ocr/paddle")
-            / source_name
+        ocr_dir = paddle_directory(
+            filename
         )
 
-        # --------------------------------
-        # Get physical pages
-        # --------------------------------
+        if not ocr_dir.exists():
+            raise FileNotFoundError(
+                f"OCR directory not found: "
+                f"{ocr_dir}"
+            )
+
+        # -----------------------------------------------------
+        # Physical pages
+        # -----------------------------------------------------
 
         with connection.cursor() as cursor:
-
             cursor.execute(
                 """
                 SELECT
@@ -91,16 +124,29 @@ def main():
 
             pages = cursor.fetchall()
 
-        # --------------------------------
+        if not pages:
+            raise RuntimeError(
+                "No pages registered for "
+                "this source file."
+            )
+
+        # -----------------------------------------------------
         # Safety check
-        # --------------------------------
+        #
+        # Do not automatically overwrite existing
+        # report assignments.
+        # -----------------------------------------------------
 
         already_segmented = any(
-            _page_has_report(
+            page_has_report(
                 connection,
-                page_id
+                page_id,
             )
-            for page_id, _, _ in pages
+            for (
+                page_id,
+                _,
+                _,
+            ) in pages
         )
 
         if already_segmented:
@@ -110,19 +156,33 @@ def main():
                 "segment automatically."
             )
 
+        # =====================================================
+        # Segmentation
+        # =====================================================
+
         print()
+        print("=== REPORT SEGMENTATION ===")
+        print()
+
         print(
-            f"Segmenting: {filename}"
+            f"Source file ID: {args.source_file}"
         )
+
+        print(
+            f"Source:         {filename}"
+        )
+
+        print(
+            f"OCR directory:  {ocr_dir}"
+        )
+
         print()
 
         current_report_id = None
         report_page_number = 0
-        detected_reports = 0
 
-        # --------------------------------
-        # Walk pages
-        # --------------------------------
+        detected_reports = 0
+        unassigned_pages = 0
 
         for (
             page_id,
@@ -130,21 +190,32 @@ def main():
             corpus_page_number,
         ) in pages:
 
+            # ---------------------------------------------
+            # Saved Paddle OCR JSON
+            # ---------------------------------------------
+
             json_path = (
-                args.ocr_dir
+                ocr_dir
                 / f"page_{source_page_number:04d}.json"
             )
 
             if not json_path.exists():
                 raise FileNotFoundError(
-                    f"OCR JSON missing: {json_path}"
+                    f"OCR JSON missing: "
+                    f"{json_path}"
                 )
 
             with json_path.open(
                 "r",
                 encoding="utf-8",
             ) as file:
-                regions = json.load(file)
+                regions = json.load(
+                    file
+                )
+
+            # ---------------------------------------------
+            # Detect report boundary
+            # ---------------------------------------------
 
             detection = (
                 detect_report_boundary(
@@ -152,9 +223,9 @@ def main():
                 )
             )
 
-            # ----------------------------
+            # =============================================
             # New report
-            # ----------------------------
+            # =============================================
 
             if detection.is_candidate:
 
@@ -169,6 +240,7 @@ def main():
                 )
 
                 detected_reports += 1
+
                 report_page_number = 1
 
                 assign_page_to_report(
@@ -180,22 +252,24 @@ def main():
                 )
 
                 print(
-                    f"Page {source_page_number:04d} "
-                    f"-> NEW REPORT "
+                    f"[NEW ] "
+                    f"page "
+                    f"{source_page_number:04d} "
+                    f"-> report_id="
                     f"{current_report_id}"
                 )
 
                 if detection.report_ref_raw:
                     print(
-                        f"             REF: "
+                        f"       REF: "
                         f"{detection.report_ref_raw}"
                     )
 
                 continue
 
-            # ----------------------------
+            # =============================================
             # Continuation page
-            # ----------------------------
+            # =============================================
 
             if current_report_id is not None:
 
@@ -212,60 +286,66 @@ def main():
                 )
 
                 print(
-                    f"Page {source_page_number:04d} "
-                    f"-> report "
-                    f"{current_report_id}, "
+                    f"[CONT] "
                     f"page "
+                    f"{source_page_number:04d} "
+                    f"-> report_id="
+                    f"{current_report_id}, "
+                    f"report_page="
                     f"{report_page_number}"
                 )
 
-            else:
-                # Anything before the first detected
-                # report remains unassigned.
-                print(
-                    f"Page {source_page_number:04d} "
-                    f"-> unassigned/front matter"
-                )
+                continue
 
-        # --------------------------------
-        # Recalculate logical report order
-        # --------------------------------
+            # =============================================
+            # Before first detected report
+            # =============================================
+
+            unassigned_pages += 1
+
+            print(
+                f"[NONE] "
+                f"page "
+                f"{source_page_number:04d} "
+                f"-> unassigned/front matter"
+            )
+
+        # =====================================================
+        # Recalculate logical report ordering
+        #
+        # report_id NEVER changes.
+        # report_sequence is derived from physical page order.
+        # =====================================================
 
         recalculate_report_sequences(
             connection,
             corpus_id=corpus_id,
         )
 
+        # Commit all report assignments together.
         connection.commit()
 
+    # =========================================================
+    # Summary
+    # =========================================================
+
     print()
+    print("--- Summary ---")
+    print()
+
     print(
         f"Reports detected: "
         f"{detected_reports}"
     )
 
+    print(
+        f"Unassigned pages: "
+        f"{unassigned_pages}"
+    )
 
-def _page_has_report(
-    connection,
-    page_id: int,
-) -> bool:
-
-    with connection.cursor() as cursor:
-
-        cursor.execute(
-            """
-            SELECT report_id
-            FROM page
-            WHERE page_id = %s;
-            """,
-            (page_id,),
-        )
-
-        result = cursor.fetchone()
-
-    return (
-        result is not None
-        and result[0] is not None
+    print()
+    print(
+        "Report segmentation complete."
     )
 
 

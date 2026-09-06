@@ -1,5 +1,11 @@
 import argparse
+
 from pathlib import Path
+
+from src.paths import (
+    from_project_relative,
+    paddle_directory,
+)
 
 from src.database import get_connection
 from src.ocr_paddle import PaddleOCREngine
@@ -178,13 +184,9 @@ def main():
     # Output directory
     # ---------------------------------
 
-    source_name = make_source_name(
+    output_dir = paddle_directory(
         filename
     )
-
-    output_dir = Path(
-        "data/ocr/paddle"
-    ) / source_name
 
     output_dir.mkdir(
         parents=True,
@@ -251,7 +253,7 @@ def main():
             source_page_number=(
                 source_page_number
             ),
-            image_path=Path(
+            image_path=from_project_relative(
                 image_path
             ),
             output_dir=output_dir,

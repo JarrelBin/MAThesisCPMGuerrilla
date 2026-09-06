@@ -1,4 +1,6 @@
-from pathlib import Path
+from src.paths import (
+    from_project_relative,
+)
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -52,7 +54,7 @@ def show_source_crop(candidate):
     Paddle component containing the token.
     """
 
-    image_path = Path(
+    image_path = from_project_relative(
         candidate["image_path"]
     )
 

@@ -5,17 +5,28 @@ from paddleocr import PaddleOCR
 
 
 class PaddleOCREngine:
-    def __init__(self, lang: str = "en"):
+    def __init__(
+        self,
+        lang: str = "en",
+        device: str = "cpu",
+        enable_mkldnn: bool = False,
+    ):
         """
         Initialise PaddleOCR.
 
-        MKLDNN is disabled because of the compatibility issue
-        encountered with the current PaddlePaddle CPU environment.
+        MKLDNN is disabled because of the compatibility
+        issue encountered with the current PaddlePaddle
+        CPU environment.
         """
 
+        self.lang = lang
+        self.device = device
+        self.enable_mkldnn = enable_mkldnn
+
         self.ocr = PaddleOCR(
-            lang=lang,
-            enable_mkldnn=False,
+            lang=self.lang,
+            device=self.device,
+            enable_mkldnn=self.enable_mkldnn,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
@@ -53,27 +64,6 @@ class PaddleOCREngine:
         for result in results:
             #result.print()
             data = result.json["res"]
-            
-            region_index = 4
-            
-            #tiny diagnostic code to confirm semantic alignment
-            parts = data["text_word"][region_index]
-            boxes = data["text_word_boxes"][region_index]
-
-            print("TEXT:")
-            print(data["rec_texts"][region_index])
-
-            print()
-            print("PARTS:")
-            print(parts)
-
-            print()
-            print("NUMBER OF PARTS:")
-            print(len(parts))
-
-            print()
-            print("NUMBER OF BOXES:")
-            print(len(boxes))
 
             texts = data["rec_texts"]
             scores = data["rec_scores"]
@@ -82,6 +72,21 @@ class PaddleOCREngine:
             
             word_parts = data["text_word"]
             word_boxes = data["text_word_boxes"]
+
+            lengths = {
+                "texts": len(texts),
+                "scores": len(scores),
+                "boxes": len(boxes),
+                "polygons": len(polygons),
+                "word_parts": len(word_parts),
+                "word_boxes": len(word_boxes),
+            }
+
+            if len(set(lengths.values())) != 1:
+                raise ValueError(
+                    "PaddleOCR returned mismatched "
+                    f"region counts: {lengths}"
+                )
 
             for sequence, (
                 text,
