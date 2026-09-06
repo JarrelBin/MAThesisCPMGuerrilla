@@ -1,5 +1,5 @@
-#kraken OCR models
-models/*.mlmodel
+#OCR models
+models/*
 
 # Python
 __pycache__/
@@ -36,3 +36,10 @@ data/corrected/*
 
 #jupyter
 .ipynb_checkpoints/
+
+#Environment / secrets
+.env
+.env.*
+
+# Local database/export files
+data/database/

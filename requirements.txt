@@ -1,0 +1,9 @@
+paddleocr
+paddlepaddle
+pymupdf
+pillow
+psycopg[binary]
+python-dotenv
+rapidfuzz
+jiwer
+matplotlib

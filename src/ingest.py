@@ -12,7 +12,7 @@ def calculate_sha256(path: Path) -> str:
     return sha256.hexdigest()
 
 
-def ingest_document(path: Path) -> dict:
+def inspect_source_file(path: Path) -> dict:
     return {
         "filename": path.name,
         "filepath": str(path),
