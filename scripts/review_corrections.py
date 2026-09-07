@@ -2,6 +2,7 @@ from src.paths import (
     from_project_relative,
 )
 
+import argparse
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
@@ -286,14 +287,29 @@ def save_no_correction(
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Review OCR correction candidates."
+    )
+
+    parser.add_argument(
+        "--page",
+        type=int,
+        help="Review candidates from one source page only",
+    )
+
+    args = parser.parse_args()
 
     with get_connection() as connection:
 
-        candidates = (
-            get_correction_candidates(
+        candidates = get_correction_candidates(
                 connection
             )
-        )
+        if args.page is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate["page"] == args.page
+            ]
 
     if not candidates:
         print(

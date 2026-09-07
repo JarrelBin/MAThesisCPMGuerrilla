@@ -1,4 +1,5 @@
 paddleocr
+paddlepaddle
 pymupdf
 pillow
 psycopg[binary]
