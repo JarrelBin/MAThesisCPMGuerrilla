@@ -1,9 +1,28 @@
 import argparse
 import json
 
-from pathlib import Path
-from src.paths import paddle_directory
 from importlib.metadata import version
+from pathlib import Path
+
+from src.database import get_connection
+from src.paths import (
+    paddle_directory,
+    to_project_relative,
+)
+from src.repository import (
+    get_ocr_run,
+    get_pages_for_ocr_ingestion,
+    get_source_file,
+    insert_ocr_region,
+    insert_ocr_run,
+    insert_token,
+)
+from src.tokenize import tokenize_regions
+
+
+# ============================================================
+# Installed OCR versions
+# ============================================================
 
 PADDLEOCR_VERSION = version(
     "paddleocr"
@@ -13,19 +32,16 @@ PADDLEPADDLE_VERSION = version(
     "paddlepaddle"
 )
 
-from src.database import get_connection
-from src.repository import (
-    get_pages_for_source_file,
-    get_source_file,
-    get_ocr_run,
-    insert_ocr_run,
-    insert_ocr_region,
-    insert_token,
-)
-from src.tokenize import tokenize_regions
 
+# ============================================================
+# OCR provenance
+#
+# Keep this synchronized with the actual PaddleOCR settings
+# used by src/ocr_paddle.py.
+# ============================================================
 
 PADDLE_PARAMETERS = {
+    "device": "cpu",
     "enable_mkldnn": False,
     "use_doc_orientation_classify": False,
     "use_doc_unwarping": False,
@@ -34,25 +50,36 @@ PADDLE_PARAMETERS = {
 }
 
 
+# ============================================================
+# Single-page ingestion
+# ============================================================
+
 def ingest_page(
     connection,
     *,
     page_id: int,
-    source_page_number: int,
     json_path: Path,
 ) -> tuple[int, int, int] | None:
     """
-    Ingest one saved PaddleOCR page.
+    Ingest one saved PaddleOCR JSON artifact.
 
     Returns:
-        (ocr_run_id, region_count, token_count)
+        (
+            ocr_run_id,
+            region_count,
+            token_count,
+        )
 
-    Returns None if the Paddle run is already present.
+    Returns None when this PaddleOCR run has already
+    been ingested for the page.
+
+    Confirmed sketch handling occurs before this function
+    is called.
     """
 
-    # ---------------------------------
+    # --------------------------------------------------------
     # Idempotency
-    # ---------------------------------
+    # --------------------------------------------------------
 
     existing_run = get_ocr_run(
         connection,
@@ -63,44 +90,67 @@ def ingest_page(
     if existing_run is not None:
         return None
 
-    # ---------------------------------
-    # Load OCR artifact
-    # ---------------------------------
+    # --------------------------------------------------------
+    # OCR artifact
+    # --------------------------------------------------------
 
-    if not json_path.exists():
+    if not json_path.is_file():
         raise FileNotFoundError(
-            f"OCR JSON not found: {json_path}"
+            f"OCR JSON not found: "
+            f"{json_path}"
         )
 
     with json_path.open(
         "r",
         encoding="utf-8",
     ) as file:
-        regions = json.load(file)
+        regions = json.load(
+            file
+        )
 
-    # Make sure this is the newer JSON format.
+    # --------------------------------------------------------
+    # Validate expected Paddle format
+    #
+    # We require paddle_parts because our tokenizer relies
+    # on Paddle's word/component boxes.
+    # --------------------------------------------------------
+
     for region in regions:
+
         if "paddle_parts" not in region:
             raise ValueError(
                 f"{json_path} does not contain "
-                "'paddle_parts'. Regenerate this OCR page "
-                "with return_word_box=True."
+                "'paddle_parts'. "
+                "Regenerate this OCR page with "
+                "return_word_box=True."
             )
 
-    tokens = tokenize_regions(regions)
+    # --------------------------------------------------------
+    # Tokenize
+    # --------------------------------------------------------
 
-    # Group tokens by OCR region.
+    tokens = tokenize_regions(
+        regions
+    )
+
     tokens_by_region = {}
 
     for token in tokens:
-        tokens_by_region.setdefault(
-            token["region_index"],
-            [],
-        ).append(token)
 
-    # ---------------------------------
+        region_index = token[
+            "region_index"
+        ]
+
+        tokens_by_region.setdefault(
+            region_index,
+            [],
+        ).append(
+            token
+        )
+
+    # --------------------------------------------------------
     # OCR run
-    # ---------------------------------
+    # --------------------------------------------------------
 
     ocr_run_id = insert_ocr_run(
         connection,
@@ -111,15 +161,20 @@ def ingest_page(
         model_name="default English pipeline",
         language="en",
         parameters=PADDLE_PARAMETERS,
-        raw_output_path=str(json_path),
+
+        # Store a portable project-relative path rather
+        # than an Ubuntu/Windows-specific absolute path.
+        raw_output_path=to_project_relative(
+            json_path
+        ),
     )
 
     region_count = 0
     token_count = 0
 
-    # ---------------------------------
+    # --------------------------------------------------------
     # Regions + tokens
-    # ---------------------------------
+    # --------------------------------------------------------
 
     for region in regions:
 
@@ -131,10 +186,15 @@ def ingest_page(
 
         region_count += 1
 
-        for token in tokens_by_region.get(
-            region["region_index"],
-            [],
-        ):
+        region_tokens = (
+            tokens_by_region.get(
+                region["region_index"],
+                [],
+            )
+        )
+
+        for token in region_tokens:
+
             insert_token(
                 connection,
                 region_id=region_id,
@@ -150,10 +210,16 @@ def ingest_page(
     )
 
 
+# ============================================================
+# Main
+# ============================================================
+
 def main():
+
     parser = argparse.ArgumentParser(
         description=(
-            "Ingest saved PaddleOCR JSON into PostgreSQL."
+            "Ingest saved PaddleOCR JSON "
+            "into PostgreSQL."
         )
     )
 
@@ -162,29 +228,36 @@ def main():
         type=int,
         required=True,
         help="source_file_id",
-    )   
+    )
 
-    group = parser.add_mutually_exclusive_group(
-        required=True
+    group = (
+        parser.add_mutually_exclusive_group(
+            required=True
+        )
     )
 
     group.add_argument(
         "--page",
         type=int,
-        help="Ingest one source PDF page",
+        help=(
+            "Ingest one source PDF page"
+        ),
     )
 
     group.add_argument(
         "--all",
         action="store_true",
-        help="Ingest every page in the source file",
+        help=(
+            "Ingest every eligible page "
+            "in the source file"
+        ),
     )
 
     args = parser.parse_args()
 
-    # ---------------------------------
-    # Source file + physical pages
-    # ---------------------------------
+    # ========================================================
+    # Source + pages
+    # ========================================================
 
     with get_connection() as connection:
 
@@ -200,7 +273,12 @@ def main():
                 f"does not exist."
             )
 
-        pages = get_pages_for_source_file(
+        # IMPORTANT:
+        #
+        # Use the OCR-specific repository function here
+        # because we need page_type and
+        # page_type_reviewed.
+        pages = get_pages_for_ocr_ingestion(
             connection,
             source_file_id=args.source_file,
         )
@@ -219,23 +297,23 @@ def main():
         page_count,
     ) = source
 
-    # ---------------------------------
-    # Derive OCR directory
-    # ---------------------------------
+    # ========================================================
+    # Paddle output directory
+    # ========================================================
 
     ocr_dir = paddle_directory(
         filename
     )
 
-    if not ocr_dir.exists():
+    if not ocr_dir.is_dir():
         raise FileNotFoundError(
             f"OCR directory not found: "
             f"{ocr_dir}"
         )
 
-    # ---------------------------------
-    # Optional page selection
-    # ---------------------------------
+    # ========================================================
+    # Optional one-page selection
+    # ========================================================
 
     if args.page is not None:
 
@@ -248,83 +326,97 @@ def main():
         if not pages:
             raise RuntimeError(
                 f"Source page "
-                f"{args.page} does not exist."
-            )
-
-    # ---------------------------------
-    # Get physical pages
-    # ---------------------------------
-
-    with get_connection() as connection:
-
-        source = get_source_file(
-            connection,
-            source_file_id=args.source_file,
-        )
-
-        if source is None:
-            raise RuntimeError(
-                f"Source file ID "
-                f"{args.source_file} "
+                f"{args.page} "
                 f"does not exist."
             )
 
-        pages = get_pages_for_source_file(
-            connection,
-            source_file_id=args.source_file,
-        )
-
-    if not pages:
-        raise RuntimeError(
-            "No pages found for source file."
-        )
-
-    if args.page is not None:
-
-        pages = [
-            page
-            for page in pages
-            if page[1] == args.page
-        ]
-
-        if not pages:
-            raise RuntimeError(
-                f"Source page {args.page} "
-                "does not exist."
-            )
+    # ========================================================
+    # Header
+    # ========================================================
 
     print()
-    print("=== OCR DATABASE INGESTION ===")
+    print(
+        "=== OCR DATABASE INGESTION ==="
+    )
     print()
+
+    print(
+        f"Source file ID: {source_file_id}"
+    )
+
+    print(
+        f"Source:         {filename}"
+    )
+
+    print(
+        f"OCR directory:  {ocr_dir}"
+    )
+
+    print()
+
+    # ========================================================
+    # Counters
+    # ========================================================
+
+    inserted_pages = 0
+
+    skipped_existing = 0
+    skipped_sketches = 0
 
     total_regions = 0
     total_tokens = 0
-    inserted_pages = 0
-    skipped_pages = 0
 
-    # ---------------------------------
+    # ========================================================
     # One transaction per page
-    # ---------------------------------
+    # ========================================================
 
     for (
         page_id,
         source_page_number,
         corpus_page_number,
         image_path,
+        page_type,
+        page_type_reviewed,
     ) in pages:
 
         page_name = (
             f"page_{source_page_number:04d}"
         )
-        
-        ocr_dir = (
-            Path("data/ocr/paddle")
-            / Path(filename).stem
-        )
+
+        # ----------------------------------------------------
+        # Confirmed sketch
+        #
+        # Paddle JSON/TXT remains on disk for provenance.
+        # We simply exclude the page from the textual
+        # PostgreSQL OCR/token layer.
+        # ----------------------------------------------------
+
+        if (
+            page_type == "sketch"
+            and page_type_reviewed
+        ):
+
+            skipped_sketches += 1
+
+            print(
+                f"[SKIP] {page_name}: "
+                "confirmed sketch"
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # OCR artifact
+        # ----------------------------------------------------
+
         json_path = (
             ocr_dir
             / f"{page_name}.json"
         )
+
+        # ----------------------------------------------------
+        # Ingest
+        # ----------------------------------------------------
 
         try:
 
@@ -333,15 +425,16 @@ def main():
                 result = ingest_page(
                     connection,
                     page_id=page_id,
-                    source_page_number=(
-                        source_page_number
-                    ),
                     json_path=json_path,
                 )
 
+                # --------------------------------------------
+                # Existing OCR run
+                # --------------------------------------------
+
                 if result is None:
 
-                    skipped_pages += 1
+                    skipped_existing += 1
 
                     print(
                         f"[SKIP] {page_name}: "
@@ -358,9 +451,19 @@ def main():
 
                 connection.commit()
 
+            # -----------------------------------------------
+            # Successful page
+            # -----------------------------------------------
+
             inserted_pages += 1
-            total_regions += region_count
-            total_tokens += token_count
+
+            total_regions += (
+                region_count
+            )
+
+            total_tokens += (
+                token_count
+            )
 
             print(
                 f"[ OK ] {page_name}: "
@@ -373,24 +476,43 @@ def main():
 
             print()
             print(
-                f"[FAIL] {page_name}: {error}"
+                f"[FAIL] {page_name}: "
+                f"{error}"
             )
 
             raise
 
+    # ========================================================
+    # Summary
+    # ========================================================
+
     print()
     print("--- Summary ---")
+    print()
+
     print(
-        f"Pages inserted: {inserted_pages}"
+        f"Pages inserted:          "
+        f"{inserted_pages}"
     )
+
     print(
-        f"Pages skipped:  {skipped_pages}"
+        f"Existing pages skipped:  "
+        f"{skipped_existing}"
     )
+
     print(
-        f"Regions:        {total_regions}"
+        f"Sketch pages skipped:    "
+        f"{skipped_sketches}"
     )
+
     print(
-        f"Tokens:         {total_tokens}"
+        f"Regions inserted:        "
+        f"{total_regions}"
+    )
+
+    print(
+        f"Tokens inserted:         "
+        f"{total_tokens}"
     )
 
 

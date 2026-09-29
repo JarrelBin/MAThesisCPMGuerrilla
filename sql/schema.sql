@@ -206,9 +206,13 @@ CREATE TABLE page (
             page_type IN (
                 'report',
                 'front_matter',
-                'unknown'
+                'unknown',
+                'sketch'
             )
         ),
+
+    page_type_reviewed BOOLEAN NOT NULL
+        DEFAULT FALSE,
 
     is_report_front_page BOOLEAN NOT NULL
         DEFAULT FALSE,

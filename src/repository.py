@@ -447,7 +447,13 @@ def assign_page_to_report(
             SET
                 report_id = %s,
                 report_page_number = %s,
-                page_type = 'report',
+                
+                page_type = CASE
+                    WHEN page_type = 'sketch'
+                        THEN 'sketch'
+                    ELSE 'report'
+                END,
+                
                 is_report_front_page = %s
             WHERE page_id = %s;
             """,
@@ -910,6 +916,31 @@ def get_pages_for_source_file(
                 source_page_number,
                 corpus_page_number,
                 image_path
+            FROM page
+            WHERE source_file_id = %s
+            ORDER BY source_page_number;
+            """,
+            (source_file_id,),
+        )
+
+        return cursor.fetchall()
+        
+
+def get_pages_for_ocr_ingestion(
+    connection,
+    *,
+    source_file_id: int,
+):
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                page_id,
+                source_page_number,
+                corpus_page_number,
+                image_path,
+                page_type,
+                page_type_reviewed
             FROM page
             WHERE source_file_id = %s
             ORDER BY source_page_number;
