@@ -1063,3 +1063,296 @@ def get_or_create_corpus(
         )
 
         return cursor.fetchone()[0]
+
+
+def upsert_correction_candidate(
+    connection,
+    *,
+    token_id: int,
+    method: str,
+    suggested_token: str | None = None,
+    details: dict | None = None,
+):
+    """
+    Insert or update a machine-generated OCR candidate.
+
+    Detection-only methods such as Qwen may leave
+    suggested_token as None.
+
+    One candidate per token/method is retained.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO correction_candidate (
+                token_id,
+                method,
+                suggested_token,
+                details
+            )
+            VALUES (
+                %s,
+                %s,
+                %s,
+                %s
+            )
+
+            ON CONFLICT (
+                token_id,
+                method
+            )
+
+            DO UPDATE SET
+                suggested_token =
+                    EXCLUDED.suggested_token,
+
+                details =
+                    EXCLUDED.details,
+
+                created_at =
+                    CURRENT_TIMESTAMP
+
+            RETURNING candidate_id;
+            """,
+            (
+                token_id,
+                method,
+                suggested_token,
+                (
+                    json.dumps(details)
+                    if details is not None
+                    else None
+                ),
+            ),
+        )
+
+        return cursor.fetchone()[0]
+
+        
+def delete_correction_candidates_by_method(
+    connection,
+    *,
+    method: str,
+):
+    """
+    Delete generated candidates from one method.
+
+    Useful when regenerating RapidFuzz/Qwen candidates.
+    """
+
+    with connection.cursor() as cursor:
+
+        cursor.execute(
+            """
+            DELETE FROM correction_candidate
+            WHERE method = %s;
+            """,
+            (method,),
+        )
+
+def get_tokens_with_correction_candidates(
+    connection,
+):
+    """
+    Return unreviewed tokens that have at least one
+    machine-generated correction candidate.
+
+    One row is returned per token/candidate method.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                t.token_id,
+                t.raw_token,
+                t.position_in_page,
+
+                t.x_min,
+                t.y_min,
+                t.x_max,
+                t.y_max,
+
+                p.page_id,
+                p.source_page_number,
+                p.image_path,
+
+                r.confidence AS ocr_confidence,
+
+                cc.candidate_id,
+                cc.method,
+                cc.suggested_token,
+                cc.details
+
+            FROM token t
+
+            JOIN ocr_region r
+                ON t.region_id = r.region_id
+
+            JOIN ocr_run o
+                ON r.ocr_run_id = o.ocr_run_id
+
+            JOIN page p
+                ON o.page_id = p.page_id
+
+            JOIN correction_candidate cc
+                ON cc.token_id = t.token_id
+
+            WHERE
+                t.correction_reviewed = FALSE
+
+            ORDER BY
+                p.corpus_page_number,
+                t.position_in_page,
+                cc.method;
+            """
+        )
+
+        return cursor.fetchall()
+
+def get_token_context(
+    connection,
+    *,
+    token_id: int,
+    window: int = 5,
+):
+    """
+    Return surrounding lexical tokens for display.
+
+    Context is derived dynamically and is not stored.
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            WITH target AS (
+                SELECT
+                    p.page_id,
+                    t.position_in_page
+
+                FROM token t
+
+                JOIN ocr_region r
+                    ON t.region_id = r.region_id
+
+                JOIN ocr_run o
+                    ON r.ocr_run_id = o.ocr_run_id
+
+                JOIN page p
+                    ON o.page_id = p.page_id
+
+                WHERE t.token_id = %s
+            )
+
+            SELECT
+                t.token_id,
+                t.raw_token,
+                t.position_in_page
+
+            FROM token t
+
+            JOIN ocr_region r
+                ON t.region_id = r.region_id
+
+            JOIN ocr_run o
+                ON r.ocr_run_id = o.ocr_run_id
+
+            JOIN page p
+                ON o.page_id = p.page_id
+
+            CROSS JOIN target x
+
+            WHERE
+                p.page_id = x.page_id
+
+                AND t.token_type != 'punctuation'
+
+                AND t.position_in_page
+                    BETWEEN
+                        x.position_in_page - %s
+                        AND
+                        x.position_in_page + %s
+
+            ORDER BY
+                t.position_in_page;
+            """,
+            (
+                token_id,
+                window,
+                window,
+            ),
+        )
+
+        return cursor.fetchall()
+
+def get_tokens_for_contextual_review(
+    connection,
+    *,
+    source_file_id: int | None = None,
+):
+    """
+    Return word/number tokens in corpus reading order.
+
+    """
+
+    parameters = []
+
+    source_filter = ""
+
+    if source_file_id is not None:
+        source_filter = (
+            "AND p.source_file_id = %s"
+        )
+
+        parameters.append(
+            source_file_id
+        )
+
+    query = f"""
+        SELECT
+            t.token_id,
+            t.raw_token,
+            t.token_type,
+
+            p.page_id,
+            p.source_file_id,
+            p.source_page_number,
+            p.corpus_page_number,
+
+            t.position_in_page
+
+        FROM token t
+
+        JOIN ocr_region r
+            ON t.region_id = r.region_id
+
+        JOIN ocr_run o
+            ON r.ocr_run_id = o.ocr_run_id
+
+        JOIN page p
+            ON o.page_id = p.page_id
+
+        WHERE
+            t.correction_reviewed = FALSE
+
+            AND NOT (
+                p.page_type = 'sketch'
+                AND p.page_type_reviewed = TRUE
+            )
+
+            {source_filter}
+
+        ORDER BY
+            p.corpus_page_number,
+            t.position_in_page;
+    """
+
+    with connection.cursor() as cursor:
+
+        cursor.execute(
+            query,
+            parameters,
+        )
+
+        return cursor.fetchall()

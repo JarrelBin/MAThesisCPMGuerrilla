@@ -424,6 +424,46 @@ CREATE TABLE token (
     )
 );
 
+-- ============================================================
+-- CORRECTION CANDIDATE
+--
+-- Machine-generated suggestions that a raw OCR token may
+-- require correction.
+--
+-- These are proposals only. They never alter analytical text
+-- unless a human accepts a correction into token_correction.
+-- ============================================================
+
+CREATE TABLE correction_candidate (
+    candidate_id BIGSERIAL PRIMARY KEY,
+
+    token_id BIGINT NOT NULL
+        REFERENCES token(token_id)
+        ON DELETE CASCADE,
+
+    method TEXT NOT NULL,
+
+    suggested_token TEXT NOT NULL,
+
+    confidence DOUBLE PRECISION
+        CHECK (
+            confidence IS NULL
+            OR (
+                confidence >= 0.0
+                AND confidence <= 1.0
+            )
+        ),
+
+    details JSONB,
+
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (
+        token_id,
+        method
+    )
+);
 
 -- ============================================================
 -- TOKEN CORRECTION
@@ -535,6 +575,14 @@ CREATE INDEX idx_correction_accepted
     ON token_correction(token_id)
     WHERE accepted = TRUE;
     
+    
+CREATE INDEX idx_correction_candidate_token
+ON correction_candidate(token_id);
+
+
+CREATE INDEX idx_correction_candidate_method
+ON correction_candidate(method);
+
 -- ============================================================
 -- ANALYTICAL TOKEN VIEW
 --

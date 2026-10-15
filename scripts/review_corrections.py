@@ -12,6 +12,8 @@ from src.correction_candidates import (
 )
 from src.database import get_connection
 from src.repository import (
+    get_token_context,
+    get_tokens_with_correction_candidates,
     insert_token_correction,
     mark_token_reviewed,
 )
@@ -285,6 +287,183 @@ def save_no_correction(
 
         connection.commit()
 
+def group_candidates(
+    rows,
+):
+    """
+    Convert database candidate rows into one review
+    object per token.
+    """
+
+    tokens = {}
+
+    for (
+            token_id,
+            raw_token,
+            position_in_page,
+
+            x_min,
+            y_min,
+            x_max,
+            y_max,
+
+            page_id,
+            source_page_number,
+            image_path,
+
+            ocr_confidence,
+
+            candidate_id,
+            method,
+            suggested_token,
+            details,
+    ) in rows:
+
+        if token_id not in tokens:
+
+            tokens[token_id] = {
+                "token_id":
+                    token_id,
+
+                "token":
+                    raw_token,
+
+                "position_in_page":
+                    position_in_page,
+
+                "page_id":
+                    page_id,
+
+                "page":
+                    source_page_number,
+
+                "image_path":
+                    image_path,
+
+                "ocr_confidence":
+                    ocr_confidence,
+                
+                "bbox": {
+                    "x_min": x_min,
+                    "y_min": y_min,
+                    "x_max": x_max,
+                    "y_max": y_max,
+                },
+
+                "candidates": [],
+            }
+
+        tokens[
+            token_id
+        ]["candidates"].append(
+            {
+                "candidate_id":
+                    candidate_id,
+
+                "method":
+                    method,
+
+                "suggested_token":
+                    suggested_token,
+
+                "details":
+                    details,
+            }
+        )
+
+    return list(
+        tokens.values()
+    )
+
+def print_machine_candidates(candidate):
+
+    print("Machine evidence:")
+    print()
+
+    for evidence in candidate["candidates"]:
+
+        method = evidence["method"]
+        suggestion = evidence["suggested_token"]
+
+        print(f"  {method}:")
+
+        if suggestion is not None:
+            print(f"    suggestion: {suggestion}")
+        else:
+            print("    detection only")
+
+        details = evidence["details"] or {}
+
+        if isinstance(details, str):
+            import json
+            details = json.loads(details)
+
+        model = details.get("model")
+        reason = details.get("reason")
+        context = details.get("context")
+
+        if model:
+            print(f"    model: {model}")
+
+        if reason:
+            print(f"    reason: {reason}")
+
+        if context:
+            print(f"    context: {context}")
+
+        print()
+
+def choose_default_suggestion(
+    candidate,
+):
+    """
+    Determine whether there is an unambiguous machine
+    suggestion that can be offered as the [y] action.
+
+    If methods disagree, require manual entry instead.
+    """
+
+    suggestions = {
+        evidence["suggested_token"]
+        for evidence in candidate["candidates"]
+        if evidence["suggested_token"]
+        is not None
+    }
+
+    if len(suggestions) == 1:
+        return next(
+            iter(suggestions)
+        )
+
+    return None
+
+def format_context(
+    context_rows,
+    target_token_id,
+):
+    parts = []
+
+    for (
+        token_id,
+        token,
+        position,
+    ) in context_rows:
+
+        if token_id == target_token_id:
+
+            parts.append(
+                f">>> {token} <<<"
+            )
+
+        else:
+
+            parts.append(
+                token
+            )
+
+    return " ".join(
+        parts
+    )
 
 def main():
     parser = argparse.ArgumentParser(
@@ -294,22 +473,41 @@ def main():
     parser.add_argument(
         "--page",
         type=int,
-        help="Review candidates from one source page only",
+        help=(
+            "Review candidates from one "
+            "source page only"
+        ),
     )
 
     args = parser.parse_args()
 
+    # =========================================================
+    # Load stored machine candidates
+    # =========================================================
+
     with get_connection() as connection:
 
-        candidates = get_correction_candidates(
+        rows = (
+            get_tokens_with_correction_candidates(
                 connection
             )
-        if args.page is not None:
-            candidates = [
-                candidate
-                for candidate in candidates
-                if candidate["page"] == args.page
-            ]
+        )
+
+    candidates = group_candidates(
+        rows
+    )
+
+    # =========================================================
+    # Optional page filter
+    # =========================================================
+
+    if args.page is not None:
+
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate["page"] == args.page
+        ]
 
     if not candidates:
         print(
@@ -318,31 +516,115 @@ def main():
         )
         return
 
-    total = len(candidates)
+    total = len(
+        candidates
+    )
+
+    # =========================================================
+    # Review loop
+    # =========================================================
 
     for number, candidate in enumerate(
         candidates,
         start=1,
     ):
 
-        print_candidate(
-            candidate,
-            number,
-            total,
+        # -----------------------------------------------------
+        # Context
+        # -----------------------------------------------------
+
+        with get_connection() as connection:
+
+            context_rows = get_token_context(
+                connection,
+                token_id=candidate["token_id"],
+                window=5,
+            )
+
+        context = format_context(
+            context_rows,
+            candidate["token_id"],
         )
+
+        # -----------------------------------------------------
+        # Header
+        # -----------------------------------------------------
+
+        print()
+        print("=" * 72)
+        print()
+
+        print(
+            f"Candidate {number} / {total}"
+        )
+
+        print(
+            f"Token ID: "
+            f"{candidate['token_id']}"
+        )
+
+        print(
+            f"Page:     "
+            f"{candidate['page']:04d}"
+        )
+
+        print()
+
+        print("Context:")
+        print(
+            context
+        )
+
+        print()
+
+        print(
+            f"Raw OCR:        "
+            f"{candidate['token']}"
+        )
+
+        print(
+            f"OCR confidence: "
+            f"{candidate['ocr_confidence']:.4f}"
+        )
+
+        print()
+
+        # -----------------------------------------------------
+        # Machine evidence
+        # -----------------------------------------------------
+
+        print_machine_candidates(
+            candidate
+        )
+
+        # -----------------------------------------------------
+        # Determine whether machine methods provide one
+        # unambiguous correction suggestion.
+        # -----------------------------------------------------
+
+        default_suggestion = (
+            choose_default_suggestion(
+                candidate
+            )
+        )
+
+        # -----------------------------------------------------
+        # Source image
+        # -----------------------------------------------------
 
         display = show_source_crop(
             candidate
         )
 
-        neighbor = candidate[
-            "neighbor"
-        ]
+        # =====================================================
+        # Commands
+        # =====================================================
 
-        if neighbor is not None:
+        if default_suggestion is not None:
 
             print(
-                "[y] accept suggestion"
+                f"[y] accept suggestion: "
+                f"{default_suggestion}"
             )
 
         print(
@@ -369,29 +651,38 @@ def main():
 
         should_continue = True
 
+        # =====================================================
+        # Decision
+        # =====================================================
+
         match choice:
 
-            # ---------------------------------
+            # -------------------------------------------------
             # Quit
-            # ---------------------------------
+            # -------------------------------------------------
 
             case "q":
+
                 print(
                     "Exiting correction review."
                 )
 
                 should_continue = False
 
-            # ---------------------------------
+            # -------------------------------------------------
             # Skip
-            # ---------------------------------
+            #
+            # Nothing is written to PostgreSQL.
+            # Candidate will appear again next time.
+            # -------------------------------------------------
 
             case "s":
+
                 pass
 
-            # ---------------------------------
+            # -------------------------------------------------
             # OCR is already correct
-            # ---------------------------------
+            # -------------------------------------------------
 
             case "n":
 
@@ -399,7 +690,11 @@ def main():
 
                     mark_token_reviewed(
                         connection,
-                        token_id=candidate["token_id"],
+                        token_id=(
+                            candidate[
+                                "token_id"
+                            ]
+                        ),
                     )
 
                     connection.commit()
@@ -409,31 +704,44 @@ def main():
                     "(no correction)."
                 )
 
-            # ---------------------------------
-            # Accept suggestion
-            # ---------------------------------
+            # -------------------------------------------------
+            # Accept machine suggestion
+            # -------------------------------------------------
 
-            case "y" if neighbor is not None:
+            case "y" if (
+                default_suggestion
+                is not None
+            ):
 
-                corrected = neighbor["candidate"]
+                corrected = (
+                    default_suggestion
+                )
 
                 with get_connection() as connection:
 
                     insert_token_correction(
                         connection,
-                        token_id=candidate["token_id"],
+                        token_id=(
+                            candidate[
+                                "token_id"
+                            ]
+                        ),
                         corrected_token=corrected,
                         method="human",
                         confidence=None,
                         notes=(
-                            "Accepted lexical-neighbour "
+                            "Accepted machine-generated "
                             "suggestion during review."
                         ),
                     )
 
                     mark_token_reviewed(
                         connection,
-                        token_id=candidate["token_id"],
+                        token_id=(
+                            candidate[
+                                "token_id"
+                            ]
+                        ),
                     )
 
                     connection.commit()
@@ -444,14 +752,14 @@ def main():
                     f"-> {corrected}"
                 )
 
-            # ---------------------------------
+            # -------------------------------------------------
             # Manual correction
-            # ---------------------------------
+            # -------------------------------------------------
 
             case "e":
 
-                # Image stays open while this input
-                # is being entered.
+                # Image remains open while you inspect it
+                # and type the correction.
                 corrected = input(
                     "Corrected token > "
                 ).strip()
@@ -462,7 +770,11 @@ def main():
 
                         insert_token_correction(
                             connection,
-                            token_id=candidate["token_id"],
+                            token_id=(
+                                candidate[
+                                    "token_id"
+                                ]
+                            ),
                             corrected_token=corrected,
                             method="human",
                             confidence=None,
@@ -474,7 +786,11 @@ def main():
 
                         mark_token_reviewed(
                             connection,
-                            token_id=candidate["token_id"],
+                            token_id=(
+                                candidate[
+                                    "token_id"
+                                ]
+                            ),
                         )
 
                         connection.commit()
@@ -486,33 +802,37 @@ def main():
                     )
 
                 else:
+
                     print(
                         "Empty correction ignored."
                     )
 
-            # ---------------------------------
-            # y without suggestion
-            # ---------------------------------
+            # -------------------------------------------------
+            # y when machine methods do not provide one
+            # unambiguous suggestion
+            # -------------------------------------------------
 
             case "y":
+
                 print(
-                    "No suggestion is available."
+                    "No single machine suggestion "
+                    "is available."
                 )
 
-            # ---------------------------------
+            # -------------------------------------------------
             # Invalid command
-            # ---------------------------------
+            # -------------------------------------------------
 
             case _:
+
                 print(
                     "Unknown command; candidate "
                     "left unreviewed."
                 )
 
-
-        # ---------------------------------
-        # One common cleanup point
-        # ---------------------------------
+        # =====================================================
+        # Common cleanup
+        # =====================================================
 
         close_source_crop(
             display
@@ -526,6 +846,6 @@ def main():
         "All current correction "
         "candidates reviewed."
     )
-
+    
 if __name__ == "__main__":
     main()
