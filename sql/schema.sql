@@ -207,7 +207,8 @@ CREATE TABLE page (
                 'report',
                 'front_matter',
                 'unknown',
-                'sketch'
+                'sketch',
+                'personalities'
             )
         ),
 
@@ -637,6 +638,7 @@ SELECT
     p.source_file_id,
     p.source_page_number,
     p.corpus_page_number,
+    p.page_type,
 
     -- --------------------------------------------------------
     -- Historical report structure

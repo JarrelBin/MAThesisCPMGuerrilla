@@ -30,14 +30,7 @@ def main():
             connection,
             method="pattern",
         )
-
-        delete_correction_candidates_by_method(
-            connection,
-            method="rapidfuzz",
-        )
-
         pattern_count = 0
-        rapidfuzz_count = 0
 
         for candidate in candidates:
 
@@ -87,46 +80,6 @@ def main():
 
                 pattern_count += 1
 
-            # ---------------------------------------------
-            # RapidFuzz candidate
-            # ---------------------------------------------
-
-            neighbor = candidate[
-                "neighbor"
-            ]
-
-            if neighbor is not None:
-
-
-                upsert_correction_candidate(
-                    connection,
-                    token_id=token_id,
-                    method="rapidfuzz",
-                    suggested_token=(
-                        neighbor[
-                            "candidate"
-                        ]
-                    ),
-                    details={
-                        "raw_frequency":
-                            candidate[
-                                "frequency"
-                            ],
-
-                        "candidate_frequency":
-                            neighbor[
-                                "candidate_frequency"
-                            ],
-
-                        "ocr_confidence":
-                            candidate[
-                                "confidence"
-                            ],
-                    },
-                )
-
-                rapidfuzz_count += 1
-
         connection.commit()
 
     print()
@@ -138,11 +91,6 @@ def main():
     print(
         f"Pattern candidates:   "
         f"{pattern_count}"
-    )
-
-    print(
-        f"RapidFuzz candidates: "
-        f"{rapidfuzz_count}"
     )
 
 

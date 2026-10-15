@@ -286,18 +286,8 @@ def get_correction_candidates(
 
         if repeated_stable_form:
             base_reasons = []
-            neighbor = None
 
-        else:
-            neighbor = None
-
-            if frequency <= 3:
-                neighbor = (
-                    find_lexical_neighbor(
-                        raw_token,
-                        frequencies,
-                    )
-                )
+        neighbor = None
 
         if (
             not base_reasons
