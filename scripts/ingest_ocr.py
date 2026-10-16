@@ -1,7 +1,7 @@
 import argparse
 import json
 
-from importlib.metadata import version
+from importlib.metadata import (version,PackageNotFoundError,)
 from pathlib import Path
 
 from src.database import get_connection
@@ -27,10 +27,29 @@ from src.tokenize import tokenize_regions
 PADDLEOCR_VERSION = version(
     "paddleocr"
 )
+def get_paddlepaddle_version() -> str:
+    """
+    Retrieve the PaddlePaddle version on either
+    CPU or GPU installations.
+    """
 
-PADDLEPADDLE_VERSION = version(
-    "paddlepaddle"
-)
+    for package_name in (
+        "paddlepaddle-gpu",
+        "paddlepaddle",
+    ):
+        try:
+            return version(package_name)
+
+        except PackageNotFoundError:
+            continue
+
+    raise RuntimeError(
+        "Neither paddlepaddle nor paddlepaddle-gpu "
+        "is installed."
+    )
+
+
+PADDLEPADDLE_VERSION = get_paddlepaddle_version()
 
 
 # ============================================================

@@ -444,7 +444,7 @@ CREATE TABLE correction_candidate (
 
     method TEXT NOT NULL,
 
-    suggested_token TEXT NOT NULL,
+    suggested_token TEXT,
 
     confidence DOUBLE PRECISION
         CHECK (

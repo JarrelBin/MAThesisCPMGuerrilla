@@ -1,791 +1,242 @@
+"""Generate page-level OCR correction proposals with Qwen3-8B Q6_K.
+
+Run: python -m scripts.generate_qwen_candidates --source-file 1 --page 4
+Uses existing src.database and src.repository APIs. Never accepts corrections.
+"""
+from __future__ import annotations
+
 import argparse
+import json
+import re
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 from src.database import get_connection
 from src.qwen_correction import (
-    DEFAULT_MODEL,
-    QwenCorrectionModel,
+    DEFAULT_MODEL, DEFAULT_SERVER, PROMPT_VERSION, QwenCorrectionModel,
 )
-from src.repository import (
-    delete_correction_candidates_by_method,
-    get_tokens_for_contextual_review,
-    upsert_correction_candidate,
-)
+from src.repository import get_tokens_for_contextual_review, upsert_correction_candidate
 
 
-# ============================================================
-# Context-window configuration
-# ============================================================
-
-WINDOW_SIZE = 60
-WINDOW_OVERLAP = 5
-CONTEXT_RADIUS = 15
-
-
-# ============================================================
-# Group database tokens by physical page
-# ============================================================
-
-def group_by_page(
-    rows,
-) -> list[dict]:
-
+def group_by_page(rows) -> list[dict]:
     pages = {}
-
     for (
-        token_id,
-        raw_token,
-        token_type,
-        page_id,
-        source_file_id,
-        source_page_number,
-        corpus_page_number,
-        position_in_page,
+        token_id, raw_token, token_type, page_id, source_file_id,
+        source_page_number, corpus_page_number, position_in_page,
     ) in rows:
-
-        if page_id not in pages:
-
-            pages[page_id] = {
-                "page_id":
-                    page_id,
-
-                "source_file_id":
-                    source_file_id,
-
-                "source_page_number":
-                    source_page_number,
-
-                "corpus_page_number":
-                    corpus_page_number,
-
-                "tokens": [],
-            }
-
-        pages[
-            page_id
-        ]["tokens"].append(
-            {
-                "token_id":
-                    token_id,
-
-                "raw_token":
-                    raw_token,
-
-                "token_type":
-                    token_type,
-
-                "position_in_page":
-                    position_in_page,
-            }
-        )
-
-    # Preserve physical corpus order.
-    return sorted(
-        pages.values(),
-        key=lambda page: (
-            page["corpus_page_number"]
-        ),
-    )
+        page = pages.setdefault(page_id, {
+            "page_id": page_id,
+            "source_file_id": source_file_id,
+            "source_page_number": source_page_number,
+            "corpus_page_number": corpus_page_number,
+            "tokens": [],
+        })
+        page["tokens"].append({
+            "token_id": token_id,
+            "raw_token": raw_token,
+            "token_type": token_type,
+            "position_in_page": position_in_page,
+        })
+    for page in pages.values():
+        page["tokens"].sort(key=lambda t: t["position_in_page"])
+    return sorted(pages.values(), key=lambda p: (p["corpus_page_number"], p["page_id"]))
 
 
-# ============================================================
-# Sliding windows
-# ============================================================
+# Catch clearly self-contradictory substitutions, not every weak reason.
+SUBSTITUTION = re.compile(
+    r"['\"]([^'\"]+)['\"]\s+(?:instead of|replaced by|rather than)\s+['\"]([^'\"]+)['\"]",
+    re.IGNORECASE,
+)
+GENERIC_REASONS = {
+    "possible confusion with similar-looking characters",
+    "potential character substitution",
+    "possible missing or substituted character",
+    "possible confusion with similar-looking characters in word",
+}
 
 
-def make_windows(
-    tokens: list[dict],
-):
-    """
-    Generate overlapping token windows.
-
-    Example with:
-
-        WINDOW_SIZE = 30
-        WINDOW_OVERLAP = 5
-
-    windows:
-
-        1-30
-        26-55
-        51-80
-        ...
-    """
-
-    if WINDOW_OVERLAP >= WINDOW_SIZE:
-        raise ValueError(
-            "WINDOW_OVERLAP must be smaller "
-            "than WINDOW_SIZE."
-        )
-
-    step = (
-        WINDOW_SIZE
-        - WINDOW_OVERLAP
-    )
-
-    for start in range(
-        0,
-        len(tokens),
-        step,
-    ):
-
-        window = tokens[
-            start:
-            start + WINDOW_SIZE
-        ]
-
-        if not window:
-            break
-
-        yield window
-
-def make_candidate_context(
-    tokens: list[dict],
-    target_index: int,
-) -> list[dict]:
-
-    start = max(
-        0,
-        target_index - CONTEXT_RADIUS,
-    )
-
-    end = min(
-        len(tokens),
-        target_index + CONTEXT_RADIUS + 1,
-    )
-
-    return tokens[start:end]
+def validate_candidate(item: object, token_map: dict, seen: set) -> tuple[dict | None, str | None]:
+    if not isinstance(item, dict):
+        return None, "candidate is not an object"
+    token_id = item.get("token_id")
+    if isinstance(token_id, bool):
+        return None, "boolean token_id"
+    try:
+        token_id = int(token_id)
+    except (ValueError, TypeError):
+        return None, "invalid token_id"
+    token = token_map.get(token_id)
+    if token is None:
+        return None, "token_id outside page"
+    if token_id in seen:
+        return None, "duplicate token_id"
+    raw = item.get("raw_token")
+    suggestion = item.get("suggested_token")
+    reason = item.get("reason")
+    if not isinstance(raw, str) or raw != token["raw_token"]:
+        return None, "raw_token mismatch"
+    if not isinstance(suggestion, str) or not suggestion.strip():
+        return None, "missing replacement"
+    # Keep one-token proposals; punctuation-only or multi-token corrections
+    # need a separate alignment-aware workflow.
+    suggestion = suggestion.strip()
+    if any(c.isspace() for c in suggestion):
+        return None, "multi-token replacement requires separate workflow"
+    if suggestion == raw:
+        return None, "replacement identical to OCR token"
+    if not isinstance(reason, str) or not reason.strip():
+        return None, "missing explanation"
+    reason = reason.strip()
+    if reason.casefold() in GENERIC_REASONS:
+        return None, "generic unsupported explanation"
+    match = SUBSTITUTION.search(reason)
+    if match and match.group(1) == match.group(2):
+        return None, "contradictory substitution explanation"
+    seen.add(token_id)
+    return {
+        "token_id": token_id,
+        "raw_token": raw,
+        "suggested_token": suggestion,
+        "reason": reason,
+    }, None
 
 
-# ============================================================
-# Main
-# ============================================================
+def write_audit(directory: Path, page: dict, record: dict) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"source_{page['source_file_id']}_page_{page['source_page_number']:04d}.jsonl"
+    with path.open("a", encoding="utf-8") as output:
+        output.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+    return path
 
-def main():
 
-    # --------------------------------------------------------
-    # Command-line arguments
-    # --------------------------------------------------------
-
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate contextual OCR correction "
-            "candidates using local Qwen via "
-            "Hugging Face Transformers."
-        )
-    )
-
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Qwen3-8B Q6_K page-level OCR correction proposals")
+    parser.add_argument("--source-file", type=int)
+    parser.add_argument("--page", type=int, help="Requires --source-file")
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--server-url", default=DEFAULT_SERVER)
+    parser.add_argument("--context-size", type=int, default=8192)
+    parser.add_argument("--max-new-tokens", type=int, default=2048)
+    parser.add_argument("--max-pages", type=int)
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Audit proposals without database writes")
     parser.add_argument(
-        "--source-file",
-        type=int,
-        help=(
-            "Restrict analysis to one "
-            "source_file_id."
-        ),
+        "--audit-dir", type=Path, default=Path("data/experiments/qwen_q6_page"),
+        help="Append raw model responses and validation outcomes to per-page JSONL files",
     )
-
-    parser.add_argument(
-        "--page",
-        type=int,
-        help=(
-            "Restrict analysis to one source "
-            "page. Normally used together with "
-            "--source-file."
-        ),
-    )
-
-    parser.add_argument(
-        "--model",
-        default=DEFAULT_MODEL,
-        help=(
-            "Hugging Face Qwen model name "
-            f"(default: {DEFAULT_MODEL})."
-        ),
-    )
-
-    parser.add_argument(
-        "--max-windows",
-        type=int,
-        help=(
-            "Process only the first N windows "
-            "per page. Useful for testing."
-        ),
-    )
-
     args = parser.parse_args()
-
-    # --------------------------------------------------------
-    # Validate arguments
-    # --------------------------------------------------------
-
-    if (
-        args.page is not None
-        and args.source_file is None
-    ):
-        parser.error(
-            "--page requires --source-file"
-        )
-
-    if (
-        args.max_windows is not None
-        and args.max_windows < 1
-    ):
-        parser.error(
-            "--max-windows must be >= 1"
-        )
-
-    # ========================================================
-    # Retrieve eligible OCR tokens
-    # ========================================================
+    if args.page is not None and args.source_file is None:
+        parser.error("--page requires --source-file")
+    if args.max_pages is not None and args.max_pages < 1:
+        parser.error("--max-pages must be >= 1")
 
     with get_connection() as connection:
-
-        rows = (
-            get_tokens_for_contextual_review(
-                connection,
-                source_file_id=(
-                    args.source_file
-                ),
-            )
-        )
-
-    pages = group_by_page(
-        rows
-    )
-
-    # --------------------------------------------------------
-    # Optional source-page restriction
-    # --------------------------------------------------------
-
+        rows = get_tokens_for_contextual_review(connection, source_file_id=args.source_file)
+    pages = group_by_page(rows)
     if args.page is not None:
-
-        pages = [
-            page
-            for page in pages
-            if (
-                page[
-                    "source_page_number"
-                ]
-                == args.page
-            )
-        ]
-
+        pages = [p for p in pages if p["source_page_number"] == args.page]
+    if args.max_pages is not None:
+        pages = pages[:args.max_pages]
     if not pages:
-
-        print(
-            "No eligible tokens found."
-        )
-
+        print("No eligible pages/tokens found.")
         return
 
-    # ========================================================
-    # Summary before expensive model loading
-    # ========================================================
-
-    print()
-    print(
-        "=== QWEN CORRECTION "
-        "CANDIDATE GENERATION ==="
-    )
-    print()
-
-    print(
-        f"Model:          "
-        f"{args.model}"
-    )
-
-    if args.source_file is not None:
-
-        print(
-            f"Source file ID: "
-            f"{args.source_file}"
-        )
-
-    if args.page is not None:
-
-        print(
-            f"Source page:    "
-            f"{args.page:04d}"
-        )
-
-    print(
-        f"Pages:          "
-        f"{len(pages)}"
-    )
-
-    print(
-        f"Window size:    "
-        f"{WINDOW_SIZE}"
-    )
-
-    print(
-        f"Window overlap: "
-        f"{WINDOW_OVERLAP}"
-    )
-
-    if args.max_windows is not None:
-
-        print(
-            f"Max windows:    "
-            f"{args.max_windows} per page"
-        )
-
-    print()
-
-    # ========================================================
-    # Candidate cleanup
-    # ========================================================
-    #
-    # Only clear ALL Qwen candidates for a complete corpus run.
-    #
-    # A --source-file or --page test should not erase Qwen
-    # results generated elsewhere.
-    # ========================================================
-
-    if (
-        args.source_file is None
-        and args.page is None
-    ):
-
-        with get_connection() as connection:
-
-            delete_correction_candidates_by_method(
-                connection,
-                method="qwen",
-            )
-
-            connection.commit()
-
-        print(
-            "Cleared previous corpus-wide "
-            "Qwen candidates."
-        )
-
-        print()
-
-    # ========================================================
-    # Load Qwen ONCE
-    # ========================================================
-
+    print("\n=== QWEN Q6_K PAGE-LEVEL OCR CORRECTION PROPOSALS ===")
+    print(f"Model: {args.model} | server: {args.server_url}")
+    print(f"Pages: {len(pages)} | context: {args.context_size} | output: {args.max_new_tokens}")
+    print(f"Mode: {'DRY RUN' if args.dry_run else 'STORE PROPOSALS'}")
+    print("No existing candidates will be deleted. Upserts MAY replace prior qwen proposals.\n")
     qwen = QwenCorrectionModel(
-        model_name=args.model
+        model_name=args.model,
+        server_url=args.server_url,
+        context_size=args.context_size,
+        max_new_tokens=args.max_new_tokens,
+        verbose=args.verbose,
     )
-
-    print()
-
-    # ========================================================
-    # Process pages
-    # ========================================================
-
-    stored_candidate_ids = set()
-
-    total_model_candidates = 0
-    total_stored_candidates = 0
-    total_rejected_candidates = 0
-    total_failed_windows = 0
-    total_windows = 0
-
-    for page_number, page in enumerate(
-        pages,
-        start=1,
-    ):
-
-        source_page_number = (
-            page["source_page_number"]
-        )
-
-        print(
-            f"Page "
-            f"{source_page_number:04d} "
-            f"({page_number}/{len(pages)})"
-        )
-
-        # ----------------------------------------------------
-        # Valid token IDs for this page
-        # ----------------------------------------------------
-        #
-        # Prevent a malformed or hallucinated model response
-        # from pointing to a token outside the current page.
-        # ----------------------------------------------------
-
-        valid_tokens = {
-            token["token_id"]: token
-            for token in page["tokens"]
+    returned = rejected = stored = failed = 0
+    for i, page in enumerate(pages, 1):
+        tokens = page["tokens"]
+        page_no = page["source_page_number"]
+        print(f"Page {page_no:04d} ({i}/{len(pages)}): {len(tokens)} tokens", flush=True)
+        start = time.perf_counter()
+        audit = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "source_file_id": page["source_file_id"],
+            "page_id": page["page_id"],
+            "source_page_number": page_no,
+            "page_token_count": len(tokens),
+            "model": args.model,
+            "quantization": "Q6_K",
+            "backend": "llama.cpp",
+            "prompt_version": PROMPT_VERSION,
+            "dry_run": args.dry_run,
         }
-
-        # ----------------------------------------------------
-        # Generate overlapping windows
-        # ----------------------------------------------------
-
-        windows = list(
-            make_windows(
-                page["tokens"]
-            )
-        )
-
-        if args.max_windows is not None:
-
-            windows = windows[
-                :args.max_windows
-            ]
-
-        print(
-            f"  Tokens:  "
-            f"{len(page['tokens'])}"
-        )
-
-        print(
-            f"  Windows: "
-            f"{len(windows)}"
-        )
-
-        # ----------------------------------------------------
-        # Qwen inference
-        # ----------------------------------------------------
-
-        for window_number, window in enumerate(
-            windows,
-            start=1,
-        ):
-
-            total_windows += 1
-
-            print(
-                f"  Window "
-                f"{window_number}/"
-                f"{len(windows)} "
-                f"({len(window)} tokens)",
-                flush=True,
-            )
-
-            start_time = (
-                time.perf_counter()
-            )
-
-            try:
-
-                suggestions = (
-                    qwen.analyze_token_window(
-                        window
-                    )
-                )
-
-            except Exception as error:
-
-                elapsed = (
-                    time.perf_counter()
-                    - start_time
-                )
-
-                total_failed_windows += 1
-
-                print(
-                    f"    FAILED after "
-                    f"{elapsed:.1f}s: "
-                    f"{error}",
-                    flush=True,
-                )
-
-                # Do not destroy results from previous
-                # successful windows.
-                continue
-
-            elapsed = (
-                time.perf_counter()
-                - start_time
-            )
-
-            print(
-                f"    Completed in "
-                f"{elapsed:.1f}s "
-                f"| candidates="
-                f"{len(suggestions)}",
-                flush=True,
-            )
-
-            total_model_candidates += (
-                len(suggestions)
-            )
-
-            # ------------------------------------------------
-            # Validate Qwen suggestions
-            # ------------------------------------------------
-
-            for suggestion in suggestions:
-                if not isinstance(
-                    suggestion,
-                    dict,
-                ):
-                    total_rejected_candidates += 1
-
-                    print(
-                        "    REJECTED: "
-                        "candidate is not an object"
-                    )
-
-                    continue
-
-                token_id = suggestion.get(
-                    "token_id"
-                )
-
-                reason = suggestion.get(
-                    "reason"
-                )
-                
-                qwen_raw_token = suggestion.get(
-                    "raw_token"
-                )
-                
-
-                # --------------------------------------------
-                # token_id validation
-                # --------------------------------------------
-
-                try:
-
-                    token_id = int(
-                        token_id
-                    )
-
-                except (
-                    TypeError,
-                    ValueError,
-                ):
-
-                    total_rejected_candidates += 1
-
-                    print(
-                        f"    REJECTED: "
-                        f"invalid token_id="
-                        f"{token_id!r}"
-                    )
-
-                    continue
-
-                if token_id not in valid_tokens:
-
-                    total_rejected_candidates += 1
-
-                    print(
-                        f"    REJECTED: "
-                        f"token_id={token_id} "
-                        f"is outside the current page"
-                    )
-
-                    continue
-
-                # Validate the ID before looking up its raw token.
-                # Restrict it to the current window, not just the page.
-                window_tokens = {
-                    token["token_id"]: token
-                    for token in window
-                }
-                if token_id not in window_tokens:
-                    total_rejected_candidates += 1
-                    print(f"    REJECTED: token_id={token_id} outside current window")
-                    continue
-
-                raw_token = window_tokens[token_id]["raw_token"]
-
-                # --------------------------------------------
-                # Qwen token-alignment validation
-                # --------------------------------------------
-
-                if not isinstance(
-                    qwen_raw_token,
-                    str,
-                ):
-
-                    total_rejected_candidates += 1
-
-                    print(
-                        f"    REJECTED: "
-                        f"token_id={token_id} "
-                        f"has no valid raw_token"
-                    )
-
-                    continue
-
-
-                qwen_raw_token = (
-                    qwen_raw_token.strip()
-                )
-
-
-                if qwen_raw_token != raw_token:
-
-                    total_rejected_candidates += 1
-
-                    print(
-                        f"    REJECTED: "
-                        f"token alignment mismatch"
-                    )
-
-                    print(
-                        f"      Qwen:     "
-                        f"[{token_id}] "
-                        f"{qwen_raw_token!r}"
-                    )
-
-                    print(
-                        f"      Database: "
-                        f"[{token_id}] "
-                        f"{raw_token!r}"
-                    )
-
-                    continue
-
-                # --------------------------------------------
-                # Reason validation
-                # --------------------------------------------
-                #
-                # A reason is useful as an audit trail, but it
-                # is not required for storing a candidate.
-                # --------------------------------------------
-
-                if not isinstance(
-                    reason,
-                    str,
-                ):
-                    reason = None
-
-                elif not reason.strip():
-                    reason = None
-
-                else:
-                    reason = reason.strip()
-
-                # --------------------------------------------
-                # Duplicate handling
-                # --------------------------------------------
-                #
-                # Overlapping windows can identify the same
-                # token more than once.
-                #
-                # For now, store only the first accepted
-                # proposal for a token during this run.
-                #
-                # Agreement/disagreement across windows can
-                # later be retained as separate evidence.
-                # --------------------------------------------
-
-                if (
-                    token_id
-                    in stored_candidate_ids
-                ):
-
-                    total_rejected_candidates += 1
-
-                    print(
-                        f"    REJECTED: "
-                        f"{raw_token!r} "
-                        f"(already flagged this run)"
-                    )
-
-                    continue
-
-                # --------------------------------------------
-                # Store machine candidate
-                # --------------------------------------------
-                #
-                # Qwen does not provide a calibrated numerical
-                # confidence score.
-                #
-                # Store NULL rather than inventing a confidence
-                # value.
-                # --------------------------------------------
-
-                with get_connection() as connection:
-
-                    upsert_correction_candidate(
-                        connection,
-                        token_id=token_id,
-                        method="qwen",
-                        suggested_token=None,
-                        details={
-                            "reason":
-                                reason,
-
-                            "model":
-                                args.model,
-
-                            "source_page_number":
-                                source_page_number,
-
-                            "window_size":
-                                WINDOW_SIZE,
-
-                            "window_overlap":
-                                WINDOW_OVERLAP,
-
-                            "window_number":
-                                window_number,
-                        },
-                    )
-
-                    connection.commit()
-
-                stored_candidate_ids.add(
-                    token_id
-                )
-
-                total_stored_candidates += 1
-
-                print(
-                    f"    FLAGGED: "
-                    f"[{token_id}] {raw_token!r} "
-                    f"(detection only)"
-                )
-
+        try:
+            suggestions = qwen.analyze_page(tokens)
+            audit["model_response"] = qwen.last_response
+            audit["returned_candidates"] = suggestions
+            returned += len(suggestions)
+            token_map = {t["token_id"]: t for t in tokens}
+            seen = set()
+            valid, invalid = [], []
+            for item in suggestions:
+                candidate, reason = validate_candidate(item, token_map, seen)
                 if reason:
+                    rejected += 1
+                    invalid.append({"candidate": item, "rejection_reason": reason})
+                    print(f"  REJECTED: {reason} | {item!r}")
+                else:
+                    valid.append(candidate)
+            audit["validated_candidates"] = valid
+            audit["rejected_candidates"] = invalid
+            if not args.dry_run:
+                # Atomic per-page transaction; never mark corrections accepted.
+                with get_connection() as connection:
+                    for item in valid:
+                        upsert_correction_candidate(
+                            connection,
+                            token_id=item["token_id"],
+                            method="qwen",
+                            suggested_token=item["suggested_token"],
+                            details={
+                                "reason": item["reason"],
+                                "model": args.model,
+                                "backend": "llama.cpp",
+                                "quantization": "Q6_K",
+                                "prompt_version": PROMPT_VERSION,
+                                "analysis_unit": "page",
+                                "source_page_number": page_no,
+                                "page_token_count": len(tokens),
+                                "context_size": args.context_size,
+                                "max_new_tokens": args.max_new_tokens,
+                            },
+                        )
+                    connection.commit()
+                stored += len(valid)
+            for item in valid:
+                print(f"  PROPOSED [{item['token_id']}] {item['raw_token']!r} -> {item['suggested_token']!r}: {item['reason']}")
+            audit["status"] = "ok"
+            print(f"  Completed in {time.perf_counter() - start:.1f}s | {len(valid)} valid, {len(invalid)} rejected")
+        except Exception as exc:
+            failed += 1
+            audit["status"] = "failed"
+            audit["error"] = str(exc)
+            audit["model_response"] = qwen.last_response
+            print(f"  FAILED: {exc}", flush=True)
+        finally:
+            audit["elapsed_seconds"] = round(time.perf_counter() - start, 3)
+            try:
+                path = write_audit(args.audit_dir, page, audit)
+                print(f"  Audit: {path}")
+            except OSError as exc:
+                print(f"  WARNING: audit write failed: {exc}")
+    print("\n--- Qwen Summary ---")
+    print(f"Pages attempted: {len(pages)} | failed: {failed}")
+    print(f"Candidates returned: {returned} | rejected: {rejected} | stored: {stored}")
+    if failed:
+        raise SystemExit(1)
 
-                    print(
-                        f"      Reason: "
-                        f"{reason}"
-                    )
-
-        print()
-
-    # ========================================================
-    # Final summary
-    # ========================================================
-
-    print(
-        "--- Qwen Summary ---"
-    )
-
-    print()
-
-    print(
-        f"Pages processed:       "
-        f"{len(pages)}"
-    )
-
-    print(
-        f"Windows processed:     "
-        f"{total_windows}"
-    )
-
-    print(
-        f"Windows failed:        "
-        f"{total_failed_windows}"
-    )
-
-    print(
-        f"Candidates returned:   "
-        f"{total_model_candidates}"
-    )
-
-    print(
-        f"Candidates rejected:   "
-        f"{total_rejected_candidates}"
-    )
-
-    print(
-        f"Candidates stored:     "
-        f"{total_stored_candidates}"
-    )
 
 if __name__ == "__main__":
     main()
