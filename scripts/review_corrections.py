@@ -3,13 +3,12 @@ from src.paths import (
 )
 
 import argparse
+import json
+import re
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 
-from src.correction_candidates import (
-    get_correction_candidates,
-)
 from src.database import get_connection
 from src.repository import (
     get_token_context,
@@ -375,67 +374,154 @@ def group_candidates(
         tokens.values()
     )
 
-def print_machine_candidates(candidate):
-
-    print("Machine evidence:")
-    print()
-
+def load_vision_evidence(candidate):
+    """Attach latest vision evidence for each machine candidate."""
+    ids = [e["candidate_id"] for e in candidate["candidates"]]
+    if not ids:
+        return
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (candidate_id)
+                    candidate_id, model_name, model_quantization,
+                    transcription, decision
+                FROM qwen_vision_evidence
+                WHERE candidate_id = ANY(%s)
+                ORDER BY candidate_id, created_at DESC, evidence_id DESC
+                """,
+                (ids,),
+            )
+            records = cursor.fetchall()
+    lookup = {
+        row[0]: {
+            "model": row[1], "quantization": row[2],
+            "transcription": row[3], "decision": row[4],
+        }
+        for row in records
+    }
     for evidence in candidate["candidates"]:
+        evidence["vision"] = lookup.get(evidence["candidate_id"])
 
-        method = evidence["method"]
+
+def print_machine_candidates(candidate):
+    print("Machine evidence:\n")
+    for evidence in candidate["candidates"]:
+        print(f"  {evidence['method']}:")
         suggestion = evidence["suggested_token"]
-
-        print(f"  {method}:")
-
-        if suggestion is not None:
-            print(f"    suggestion: {suggestion}")
-        else:
-            print("    detection only")
-
+        print(f"    suggestion: {suggestion}" if suggestion is not None else "    detection only")
         details = evidence["details"] or {}
-
         if isinstance(details, str):
-            import json
             details = json.loads(details)
-
-        model = details.get("model")
-        reason = details.get("reason")
-        context = details.get("context")
-
-        if model:
-            print(f"    model: {model}")
-
-        if reason:
-            print(f"    reason: {reason}")
-
-        if context:
-            print(f"    context: {context}")
-
+        for field in ("model", "reason", "context"):
+            if details.get(field):
+                print(f"    {field}: {details[field]}")
+        vision = evidence.get("vision")
+        if vision:
+            print(f"    vision: {vision['model']} {vision['quantization']} | {vision['decision']}")
+            print(f"    visual transcription: {vision['transcription']}")
         print()
 
-def choose_default_suggestion(
-    candidate,
-):
-    """
-    Determine whether there is an unambiguous machine
-    suggestion that can be offered as the [y] action.
 
-    If methods disagree, require manual entry instead.
-    """
+def vision_supports_original(candidate):
+    """Conservatively detect vision agreement with the exact OCR spelling.
 
+    A CONTRADICT label alone is insufficient: it might reflect a third
+    transcription. Require the exact raw word once and no proposed word.
+    If the crop contains multiple instances, leave the choice to the human.
+    """
+    raw = candidate["token"]
+    words_pattern = r"[^\W_]+(?:['’\-][^\W_]+)*"
+    for evidence in candidate["candidates"]:
+        if evidence["method"] != "qwen" or not evidence["suggested_token"]:
+            continue
+        vision = evidence.get("vision")
+        if not vision or vision["decision"] != "CONTRADICT":
+            continue
+        words = re.findall(words_pattern, vision["transcription"], flags=re.UNICODE)
+        if words.count(raw) == 1 and evidence["suggested_token"] not in words:
+            return True
+    return False
+
+
+def choose_review_action(candidate):
+    """Return (action, suggested_token) for the y shortcut."""
+    if vision_supports_original(candidate):
+        return "keep", candidate["token"]
     suggestions = {
         evidence["suggested_token"]
         for evidence in candidate["candidates"]
-        if evidence["suggested_token"]
-        is not None
+        if evidence["suggested_token"] is not None
     }
-
     if len(suggestions) == 1:
-        return next(
-            iter(suggestions)
-        )
+        return "correct", next(iter(suggestions))
+    return None, None
 
-    return None
+
+def vision_target_suggestion(candidate, context_rows):
+    """Find a target reading using nearby OCR words, not a global word match.
+
+    Returns None when the visual transcription cannot be aligned uniquely.
+    Vision suggestions are only human-review options, never auto-accepted.
+    """
+    vision_records = [
+        evidence.get("vision")
+        for evidence in candidate["candidates"]
+        if evidence["method"] == "qwen" and evidence.get("vision")
+    ]
+    if len(vision_records) != 1:
+        return None
+
+    vision = vision_records[0]
+    transcription = vision.get("transcription") or ""
+    word_pattern = r"[^\W_]+(?:['’\-][^\W_]+)*"
+    visible = re.findall(word_pattern, transcription, flags=re.UNICODE)
+    if not visible:
+        return None
+
+    # Token context excludes punctuation; normalize in the same way.
+    context = []
+    target_index = None
+    for token_id, raw, _position in context_rows:
+        parts = re.findall(word_pattern, raw, flags=re.UNICODE)
+        if token_id == candidate["token_id"]:
+            if len(parts) != 1:
+                return None
+            target_index = len(context)
+        context.extend(parts)
+    if target_index is None:
+        return None
+
+    # Align the target using words immediately before and after it.
+    # A unique best match needs at least two nearby anchors, including
+    # one on either side, or at least three on one side.
+    scored = []
+    for index, word in enumerate(visible):
+        left = right = 0
+        for offset in (-3, -2, -1, 1, 2, 3):
+            ci = target_index + offset
+            vi = index + offset
+            if 0 <= ci < len(context) and 0 <= vi < len(visible):
+                if context[ci].casefold() == visible[vi].casefold():
+                    if offset < 0:
+                        left += 1
+                    else:
+                        right += 1
+        if (left >= 1 and right >= 1) or left >= 3 or right >= 3:
+            scored.append((left + right, index, word))
+
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    best_score = scored[0][0]
+    if sum(score == best_score for score, _index, _word in scored) != 1:
+        return None
+
+    reading = scored[0][2]
+    if reading == candidate["token"]:
+        return None  # The existing [n]/[y] keep-original action covers this.
+    return reading
+
 
 def format_context(
     context_rows,
@@ -471,6 +557,12 @@ def main():
     )
 
     parser.add_argument(
+        "--source-file",
+        type=int,
+        help="Review candidates from this source_file_id only",
+    )
+
+    parser.add_argument(
         "--page",
         type=int,
         help=(
@@ -480,6 +572,10 @@ def main():
     )
 
     args = parser.parse_args()
+    if args.source_file is not None and args.source_file < 1:
+        parser.error("--source-file must be positive")
+    if args.page is not None and args.page < 1:
+        parser.error("--page must be positive")
 
     # =========================================================
     # Load stored machine candidates
@@ -496,6 +592,18 @@ def main():
     candidates = group_candidates(
         rows
     )
+
+    # Match by permanent page IDs, not by source page numbers, which
+    # repeat across different PDFs.
+    if args.source_file is not None:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT page_id FROM page WHERE source_file_id = %s",
+                    (args.source_file,),
+                )
+                allowed_page_ids = {row[0] for row in cursor.fetchall()}
+        candidates = [c for c in candidates if c["page_id"] in allowed_page_ids]
 
     # =========================================================
     # Optional page filter
@@ -593,20 +701,19 @@ def main():
         # Machine evidence
         # -----------------------------------------------------
 
-        print_machine_candidates(
-            candidate
-        )
+        load_vision_evidence(candidate)
+        print_machine_candidates(candidate)
 
         # -----------------------------------------------------
         # Determine whether machine methods provide one
         # unambiguous correction suggestion.
         # -----------------------------------------------------
 
-        default_suggestion = (
-            choose_default_suggestion(
-                candidate
-            )
-        )
+        recommended_action, default_suggestion = choose_review_action(candidate)
+        vision_suggestion = vision_target_suggestion(candidate, context_rows)
+        # [v] is useful only when it offers a distinct alternative.
+        if vision_suggestion == default_suggestion:
+            vision_suggestion = None
 
         # -----------------------------------------------------
         # Source image
@@ -620,12 +727,13 @@ def main():
         # Commands
         # =====================================================
 
-        if default_suggestion is not None:
+        if recommended_action == "keep":
+            print(f"[y] keep original OCR: {candidate['token']}")
+        elif recommended_action == "correct":
+            print(f"[y] accept suggestion: {default_suggestion}")
 
-            print(
-                f"[y] accept suggestion: "
-                f"{default_suggestion}"
-            )
+        if vision_suggestion is not None:
+            print(f"[v] accept vision reading: {vision_suggestion}")
 
         print(
             "[e] enter different correction"
@@ -708,6 +816,12 @@ def main():
             # Accept machine suggestion
             # -------------------------------------------------
 
+            case "y" if recommended_action == "keep":
+                with get_connection() as connection:
+                    mark_token_reviewed(connection, token_id=candidate["token_id"])
+                    connection.commit()
+                print(f"Original OCR preserved: {candidate['token']}")
+
             case "y" if (
                 default_suggestion
                 is not None
@@ -751,6 +865,28 @@ def main():
                     f"{candidate['token']} "
                     f"-> {corrected}"
                 )
+
+            # -------------------------------------------------
+            # Accept the independently transcribed vision reading.
+            # The reviewer must still verify it against the scan.
+            # -------------------------------------------------
+
+            case "v" if vision_suggestion is not None:
+                with get_connection() as connection:
+                    insert_token_correction(
+                        connection,
+                        token_id=candidate["token_id"],
+                        corrected_token=vision_suggestion,
+                        method="human",
+                        confidence=None,
+                        notes="Human accepted vision transcription during review.",
+                    )
+                    mark_token_reviewed(connection, token_id=candidate["token_id"])
+                    connection.commit()
+                print(f"Vision reading saved: {candidate['token']} -> {vision_suggestion}")
+
+            case "v":
+                print("No uniquely aligned vision reading is available; use [e] if needed.")
 
             # -------------------------------------------------
             # Manual correction

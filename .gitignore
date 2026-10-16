@@ -29,6 +29,9 @@ data/ocr/*
 # Corrected/generated output
 data/corrected/*
 
+# Experimental output
+data/experiments/
+
 # OS/editor files
 .DS_Store
 .vscode/

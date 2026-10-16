@@ -11,6 +11,8 @@
 -- that must be preserved.
 -- ============================================================
 
+DROP TABLE IF EXISTS qwen_vision_evidence CASCADE;
+DROP TABLE IF EXISTS correction_candidate CASCADE;
 DROP TABLE IF EXISTS token_correction CASCADE;
 DROP TABLE IF EXISTS token CASCADE;
 DROP TABLE IF EXISTS ocr_region CASCADE;
@@ -501,6 +503,41 @@ CREATE TABLE token_correction (
         DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================
+-- QWEN VISION VERIFICATION EVIDENCE
+--
+-- Visual verification of machine-generated OCR corrections.
+-- Does not modify raw OCR or automatically accept corrections.
+-- ============================================================
+
+CREATE TABLE qwen_vision_evidence (
+    evidence_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    candidate_id BIGINT NOT NULL
+        REFERENCES correction_candidate(candidate_id)
+        ON DELETE CASCADE,
+    model_name TEXT NOT NULL,
+    model_quantization TEXT NOT NULL,
+    transcription TEXT NOT NULL,
+    decision TEXT NOT NULL
+        CHECK (
+            decision IN (
+                'SUPPORT',
+                'CONTRADICT',
+                'UNCERTAIN'
+            )
+        ),
+    crop_path TEXT NOT NULL,
+    crop_box JSONB NOT NULL,
+    metadata JSONB NOT NULL
+        DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (
+        candidate_id,
+        model_name,
+        model_quantization
+    )
+);
 
 -- ============================================================
 -- INDEXES
@@ -583,6 +620,11 @@ ON correction_candidate(token_id);
 
 CREATE INDEX idx_correction_candidate_method
 ON correction_candidate(method);
+
+
+CREATE INDEX idx_vision_evidence_candidate
+ON qwen_vision_evidence(candidate_id);
+
 
 -- ============================================================
 -- ANALYTICAL TOKEN VIEW
