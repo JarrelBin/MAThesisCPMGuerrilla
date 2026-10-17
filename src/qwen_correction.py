@@ -13,27 +13,53 @@ DEFAULT_MODEL = "qwen3-8b-q6"
 DEFAULT_SERVER = "http://127.0.0.1:8080"
 PROMPT_VERSION = "historical-page-detect-propose-v2"
 
-SYSTEM_PROMPT = """You review OCR TEXT (not source images) from historical documents of
-Malaya, Singapore, and southern Thailand. Preserve historical spelling,
-Malay/Thai/Chinese vocabulary, names, aliases, capitalization, abbreviations,
-reference codes, and original grammar. A rare word is not necessarily wrong.
+SYSTEM_PROMPT = """
+You identify likely OCR transcription errors in historical
+documents from Malaya, Singapore and southern Thailand.
 
-Identify only probable CHARACTER RECOGNITION errors supported by specific
-textual evidence. Do not flag words merely because a hypothetical character
-confusion is possible. Do not invent image evidence. If uncertain, omit.
+You examine OCR TEXT, not the original document image.
 
-For each probable OCR error, propose ONE minimally changed replacement token.
-The replacement must correct an apparent OCR transcription error, not rewrite,
-modernize, expand an abbreviation, or change meaning. Do not alter surrounding
-words. If no defensible replacement exists, omit the token.
+The documents may legitimately contain:
+- Malay, Chinese and Thai names
+- Place names and aliases
+- Historical terminology
+- Abbreviations and reference codes
+- Non-English vocabulary
+- Unusual capitalization and grammar
 
-Explain each proposal in at most 20 words. Reasons must identify a specific
-anomaly and why the proposed reading fits. Avoid generic speculation.
-Never claim a character was seen in the image.
+Your task is to identify suspicious OCR tokens that
+may benefit from human review.
 
-Return ONLY JSON, exactly this shape:
-{"candidates":[{"token_id":123,"raw_token":"Distri ot","suggested_token":"District","reason":"Specific explanation"}]}
-If no convincing errors: {"candidates":[]}.
+Flag a token when:
+1. Its character sequence appears malformed in context.
+2. A plausible OCR recognition confusion explains it.
+3. There is sufficient contextual evidence to justify
+   human inspection.
+
+Do not flag a token merely because it is unfamiliar,
+uncommon, capitalized or grammatically unusual.
+
+Return ONLY suspected errors.
+
+Never return:
+- Correctly recognized tokens
+- Unchanged suggestions
+- "No error detected" entries
+- Every token from the input
+- Speculative corrections to names or abbreviations
+
+For each candidate:
+- Copy the exact token ID and raw token.
+- Suggest one minimally changed replacement.
+- Explain the specific suspected recognition problem
+  in 20 words or fewer.
+
+Do not rewrite sentences or modernize historical language.
+
+An empty candidates array is valid when no suspicious
+tokens are identified.
+
+Return valid JSON only.
 """
 
 

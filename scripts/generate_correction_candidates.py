@@ -1,4 +1,4 @@
-"""Generate pattern-only OCR candidates (no RapidFuzz correction suggestions).
+"""Generate pattern-only OCR candidates.
 
 Examples:
   python -m scripts.generate_correction_candidates --source-file 1

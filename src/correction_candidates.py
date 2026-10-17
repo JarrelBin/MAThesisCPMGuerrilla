@@ -86,6 +86,7 @@ def get_correction_candidates(
                 JOIN ocr_run o ON o.ocr_run_id = r.ocr_run_id
                 JOIN page p ON p.page_id = o.page_id
                 WHERE t.token_type = 'word'
+                AND p.page_type IS DISTINCT FROM 'sketch'
             )
             SELECT token_id, raw_token, confidence, source_page_number,
                    position_in_page, page_id, image_path,

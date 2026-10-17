@@ -70,6 +70,28 @@ PADDLE_PARAMETERS = {
 
 
 # ============================================================
+# Check Chinese characters
+#
+#
+# 
+# ============================================================
+
+def contains_chinese(text: str) -> bool:
+    """
+    Detect Han ideographs in an OCR token.
+
+    Excludes Chinese-script tokens while preserving
+    English and romanized names.
+    """
+    return any(
+        "\u3400" <= char <= "\u4dbf"
+        or "\u4e00" <= char <= "\u9fff"
+        or "\uf900" <= char <= "\ufaff"
+        or "\U00020000" <= char <= "\U000323AF"
+        for char in text
+    )
+
+# ============================================================
 # Single-page ingestion
 # ============================================================
 
@@ -151,6 +173,16 @@ def ingest_page(
     tokens = tokenize_regions(
         regions
     )
+    
+    # Exclude tokens containing Han characters.
+    # Original PaddleOCR JSON remains unchanged.
+    tokens = [
+        token
+        for token in tokens
+        if not contains_chinese(
+            str(token["raw_token"])
+        )
+    ]
 
     tokens_by_region = {}
 

@@ -1,5 +1,9 @@
 """Integrated Qwen text proposals + optional Qwen-VL visual evidence.
 
+Vision cooling: after approximately 5 minutes of active vision processing,
+finish the current candidate, stop llama-server, rest 10 minutes, and restart.
+
+
 Examples:
  python -m scripts.generate_qwen_candidates --source-file 1 --page 4 --vision --dry-run
  python -m scripts.generate_qwen_candidates --source-file 1 --page 4 --vision --llama-exe C:\\Tools\\llama.cpp\\llama-server.exe
@@ -186,14 +190,18 @@ def main():
     p.add_argument('--mmproj',default=str(ROOT/'models/qwen3-vl-8b/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf'))
     p.add_argument('--padding-x',type=int,default=650)
     p.add_argument('--padding-y',type=int,default=100)
-    p.add_argument('--context-size',type=int,default=8192)
-    p.add_argument('--max-new-tokens',type=int,default=2048)
+    p.add_argument('--context-size',type=int,default=12288)
+    p.add_argument('--max-new-tokens',type=int,default=4096)
+    p.add_argument('--vision-work-minutes',type=float,default=5.0,help='Active vision processing time before cooling (default: 5)')
+    p.add_argument('--vision-rest-minutes',type=float,default=10.0,help='Cooling duration with vision server stopped (default: 10)')
     args=p.parse_args()
     if args.page is not None and args.source_file is None: p.error('--page requires --source-file')
     if args.vision_only: args.vision = True
     if args.force and not args.vision: p.error('--force requires --vision or --vision-only')
     if args.max_pages is not None and args.max_pages < 1: p.error('--max-pages must be positive')
     if min(args.padding_x,args.padding_y)<0: p.error('padding must be nonnegative')
+    if args.vision_work_minutes <= 0: p.error('--vision-work-minutes must be positive')
+    if args.vision_rest_minutes < 0: p.error('--vision-rest-minutes cannot be negative')
     if args.port != 8080: args.server_url=f'http://127.0.0.1:{args.port}'
     # Vision-only retrieves candidates from PostgreSQL, not the prior process's jobs list.
     if args.vision_only:
@@ -269,7 +277,26 @@ def main():
                 print(f'Pending vision candidates: {len(jobs)}', flush=True)
         if args.vision and jobs:
             manager.start(args.vision_gguf,'qwen3-vl-8b',mmproj=args.mmproj,context=4096)
-            for page,item in jobs:
+            vision_work_started = time.monotonic()
+            vision_work_seconds = args.vision_work_minutes * 60
+            vision_rest_seconds = args.vision_rest_minutes * 60
+            for job_index, (page,item) in enumerate(jobs):
+                # Only rest between candidates, never during an inference or DB write.
+                # No cooling delay after the last candidate.
+                if job_index > 0 and time.monotonic() - vision_work_started >= vision_work_seconds:
+                    print(f'\n[COOLING] Vision active for at least {args.vision_work_minutes:g} min; stopping GPU server.',flush=True)
+                    manager.stop()
+                    if vision_rest_seconds:
+                        print(f'[COOLING] Resting {args.vision_rest_minutes:g} min; {len(jobs)-job_index} candidates remain.',flush=True)
+                        rest_end = time.monotonic() + vision_rest_seconds
+                        while True:
+                            remaining = rest_end - time.monotonic()
+                            if remaining <= 0:
+                                break
+                            time.sleep(min(30, remaining))
+                    print('[COOLING] Restarting Qwen-VL server.',flush=True)
+                    manager.start(args.vision_gguf,'qwen3-vl-8b',mmproj=args.mmproj,context=4096)
+                    vision_work_started = time.monotonic()
                 token_id=item['token_id']; page_no=page['source_page_number']
                 record={'stage':'vision','timestamp':datetime.now(timezone.utc).isoformat(),'token_id':token_id,'page':page_no,'proposal':item,'dry_run':args.dry_run}
                 try:
