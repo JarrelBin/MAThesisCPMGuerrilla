@@ -46,3 +46,4 @@ data/experiments/
 
 # Local database/export files
 data/database/
+src/database.py
