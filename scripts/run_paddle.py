@@ -233,7 +233,6 @@ def main():
 
     engine = PaddleOCREngine(
         lang="en",
-        device="gpu",
     )
 
     print()
